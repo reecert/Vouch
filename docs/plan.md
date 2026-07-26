@@ -366,7 +366,7 @@ later phase's output existing.
 |---|---|---|
 | **0** | This document + baseline. | ✅ **Done.** |
 | **1a** | **L1 rebuild.** New schema, confound detection, noise filtering, identity/mailmap resolution, blame perf fix, min-n floors, byte-reproducible output. | ✅ **Done.** 83 new tests; golden files over eight fixture repos (healthy, solo, squash-merged, bot-heavy, lockfile-noisy, rebased, aliased, short-window), each deforming one axis. Goldens pin real SHAs. No LLM in the loop. |
-| **1b** | **L2 CLI.** Versioned JSONL parser, derived metrics, upload-preview + confirmation, fail-soft to git-only. | Payload-closure test passes (no raw log content can reach the payload); parser degrades cleanly on a mutated log fixture. |
+| **1b** | **L2 CLI.** Versioned JSONL parser, derived metrics, upload-preview + confirmation, fail-soft to git-only. | ✅ **Done.** 34 tests. Payload-closure test walks the *schema* (not a sample) and fails on any free-text field; parser degrades cleanly on missing, mutated and non-session logs. Validated against 17,236 real records. |
 | **1c** | **L3 join.** Local join, match scoring, three-valued corroboration verdict, labelled join set + precision/recall harness. | Accuracy reported with its n, under the existing honest-at-small-n rules. Many-to-many and no-match cases covered by fixtures. |
 | **1d** | **L4 judge.** Diff-level prompts, strict output schema with the verdict enum, SHA+path grounding validator, support check, judge cache, eval labels populated. | Eval harness runs on a *non-empty* holdout; `insufficient_evidence` is observed firing on thin inputs, not just supported in theory. |
 | **1e** | **L5 web app.** Next.js report, frozen share snapshot, Limitations + Risks-to-probe sections. | A public repo goes end-to-end to a shareable read-only URL. |
@@ -415,10 +415,11 @@ Decide before the phase that needs it:
    Screening buyers compare like-for-like, so being visibly narrower than nine needs to read as
    deliberate rigour rather than as missing features; the Limitations section carries that weight.
 
-3. **L3 join location (before 1c).** Recommended: local join, upload outcomes only (§2.3). The
-   alternative — salted path hashes, join server-side — buys server-side re-derivation when the
-   algorithm improves, at the cost of a weaker and harder-to-explain privacy claim. Confirm the
-   recommendation or take the alternative.
+3. ~~**L3 join location (before 1c).**~~ **Confirmed 2026-07-26: local join.** The L2 payload is
+   built on it — file paths and shell commands are parsed and retained in memory for L3 to join
+   against locally, and are structurally unable to reach the upload. Accepted cost: improving the
+   join algorithm requires users to re-run the CLI, and corroboration cannot be re-derived
+   server-side from stored data.
 
 4. **Judge cost model (before 1d).** Diff-level judgment is per-commit, so cost scales with history
    size, not repo count. Options: judge a bounded sample of commits selected deterministically by
@@ -451,7 +452,21 @@ Lower stakes, flagged now so they do not surprise later:
    - **Noise share is measured over human commits only**, so a dependency bot's lockfile churn is
      reported once (as `bot_dominated`) rather than twice.
 
-9. **L2 log parsing is verifiable, not synthesized (1b).** Confirmed 2026-07-26: this machine has
+9. **One brief metric could not be built as named (1b) — flagged rather than faked.** The brief
+    asks for *revision-before-acceptance*. Measuring it properly needs accept/reject telemetry,
+    and the logs carry only `toolDenialKind` — **2 occurrences across 17,187 records**. That is
+    not a denominator. Rather than dress a different measurement in the requested name, L2 ships
+    `edit_revision` (share of files edited more than once in a session — the assistant revised
+    its own work before moving on) and `human_redirect` (share of sessions containing an
+    interrupt or a denial, which is the brief's "redirect/interrupt frequency"). If true
+    acceptance telemetry matters, it needs a source other than these logs.
+
+    Related, from the same pass: `plan_before_execute` measures **1/34** on this machine's real
+    history. The number is honest — plan mode genuinely is rare here — but a single developer's
+    logs are not a calibration set, and it is a reminder that these rates will read low for most
+    people until there is a population to compare against.
+
+10. **L2 log parsing is verifiable, not synthesized (1b).** Confirmed 2026-07-26: this machine has
    54 session JSONL files across 3 projects, carrying `mode`, `permission-mode`, `user`,
    `assistant`, `attachment`, `system`, `file-history-snapshot`, `file-history-delta`,
    `last-prompt` and `queue-operation` records. `mode`/`permission-mode` are what
