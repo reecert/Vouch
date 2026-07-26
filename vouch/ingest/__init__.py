@@ -27,6 +27,10 @@ _REVERT_RE = re.compile(r"This reverts commit ([0-9a-f]{7,40})")
 
 DEFAULT_CACHE_DIR = Path(".vouch_cache")
 
+# Bumped whenever the parsed snapshot shape changes. Part of the cache filename so a stale
+# cache is a miss, never a silently-defaulted hydrate.
+SNAPSHOT_VERSION = 2
+
 
 def _git(repo_path: Path, *args: str) -> str:
     return subprocess.run(
@@ -85,15 +89,18 @@ def _revert_map(repo_path: Path) -> dict[str, str]:
 
 def _parse_commits(repo_path: Path) -> list[CommitRecord]:
     reverts = _revert_map(repo_path)
-    fmt = f"--pretty=format:{_RS}%H{_FS}%an{_FS}%ae{_FS}%aI{_FS}%s"
-    raw = _git(repo_path, "log", "--no-merges", "--name-status", fmt)
+    # %aN/%aE are mailmap-resolved (git's own sanctioned identity aliasing); %cE/%cI carry
+    # the committer so L1 can spot a rebase-rewritten history.
+    fmt = f"--pretty=format:{_RS}%H{_FS}%aN{_FS}%aE{_FS}%aI{_FS}%cE{_FS}%cI{_FS}%s"
+    raw = _git(repo_path, "log", "--no-merges", "--use-mailmap", "--name-status", fmt)
 
     commits: list[CommitRecord] = []
     for rec in raw.split(_RS):
         if not rec.strip():
             continue
         header, _, rest = rec.partition("\n")
-        sha, an, ae, aiso, subj = header.split(_FS)
+        # The subject is last and may itself contain anything except our separators.
+        sha, an, ae, aiso, ce, ciso, subj = header.split(_FS, 6)
         files: list[str] = []
         tests: list[str] = []
         for line in rest.splitlines():
@@ -113,9 +120,25 @@ def _parse_commits(repo_path: Path) -> list[CommitRecord]:
                 files=files,
                 test_files=tests,
                 reverts_sha=reverts.get(sha),
+                committer_email=ce,
+                committed_at=datetime.fromisoformat(ciso),
             )
         )
     return commits
+
+
+def _count_merges(repo_path: Path) -> int:
+    """Number of merge commits. Zero across a long history means squash/rebase merging."""
+    out = _git(repo_path, "rev-list", "--merges", "--count", "HEAD").strip()
+    return int(out or 0)
+
+
+def _is_shallow(repo_path: Path) -> bool:
+    """True if this is a shallow clone — history is truncated and every count is a floor."""
+    try:
+        return _git(repo_path, "rev-parse", "--is-shallow-repository").strip() == "true"
+    except subprocess.CalledProcessError:
+        return False
 
 
 def ingest(repo_url: str, cache_dir: Path | None = None) -> RepoSnapshot:
@@ -130,7 +153,9 @@ def ingest(repo_url: str, cache_dir: Path | None = None) -> RepoSnapshot:
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha256(repo_url.encode()).hexdigest()[:16]
-    snap_path = cache_dir / f"snap_{key}_{head_sha}.json"
+    # The snapshot version is part of the cache key: when the parsed shape changes, old
+    # caches are ignored rather than silently rehydrating missing fields as defaults.
+    snap_path = cache_dir / f"snap_v{SNAPSHOT_VERSION}_{key}_{head_sha}.json"
     if snap_path.is_file():
         return RepoSnapshot.model_validate_json(snap_path.read_text())
 
@@ -139,6 +164,8 @@ def ingest(repo_url: str, cache_dir: Path | None = None) -> RepoSnapshot:
         head_sha=head_sha,
         commits=_parse_commits(repo_path),
         ingested_at=datetime.now(),
+        n_merge_commits=_count_merges(repo_path),
+        is_shallow=_is_shallow(repo_path),
     )
     snap_path.write_text(snapshot.model_dump_json())
     return snapshot
@@ -170,6 +197,72 @@ def changed_old_lines(repo_path: Path, sha: str, file: str) -> list[int]:
             continue
         lines.extend(range(start, start + count))
     return lines
+
+
+def to_ranges(lines: list[int]) -> list[tuple[int, int]]:
+    """Collapse line numbers into contiguous ``(start, end)`` ranges. Sorted, deduped."""
+    out: list[tuple[int, int]] = []
+    for ln in sorted(set(lines)):
+        if out and ln == out[-1][1] + 1:
+            out[-1] = (out[-1][0], ln)
+        else:
+            out.append((ln, ln))
+    return out
+
+
+_PORCELAIN_HEADER_RE = re.compile(r"^([0-9a-f]{40}) \d+ (\d+)")
+
+
+def blame_ranges(
+    repo_path: Path, sha: str, file: str, lines: list[int]
+) -> dict[int, tuple[str, str]]:
+    """Blame many lines of one file in **one** git call. ``line -> (email, blamed_sha)``.
+
+    The v0 prototype ran one ``git blame`` subprocess per changed line, so a 50-line fix
+    across 3 files cost up to 150 process spawns — fine on a fixture, unusable on a real
+    repo. ``git blame`` accepts repeated ``-L`` options, and porcelain output only repeats a
+    commit's headers the first time it appears, so one call plus a sha->email cache does
+    the whole job.
+
+    Blames against ``sha^`` (the pre-image): we want who wrote the code being changed, not
+    who changed it. Returns ``{}`` when the file has no parent state (root commit, pure
+    addition) — an honest empty, never a guess.
+    """
+    ranges = to_ranges(lines)
+    if not ranges:
+        return {}
+
+    args = ["blame", "--porcelain"]
+    for start, end in ranges:
+        args += ["-L", f"{start},{end}"]
+    args += [f"{sha}^", "--", file]
+    try:
+        out = _git(repo_path, *args)
+    except subprocess.CalledProcessError:
+        return {}
+
+    result: dict[int, tuple[str, str]] = {}
+    email_by_sha: dict[str, str] = {}
+    cur_sha: str | None = None
+    cur_line: int | None = None
+
+    for row in out.splitlines():
+        if row.startswith("\t"):  # the content line closes an entry
+            continue
+        m = _PORCELAIN_HEADER_RE.match(row)
+        if m:
+            cur_sha, cur_line = m.group(1), int(m.group(2))
+            # Headers are only emitted the first time a commit appears in the output.
+            known = email_by_sha.get(cur_sha)
+            if known is not None:
+                result[cur_line] = (known, cur_sha)
+            continue
+        if row.startswith("author-mail ") and cur_sha is not None and cur_line is not None:
+            email = row[len("author-mail ") :].strip().strip("<>").lower()
+            email_by_sha[cur_sha] = email
+            result[cur_line] = (email, cur_sha)
+
+    return result
 
 
 def blame_line_author(
