@@ -19,6 +19,9 @@ from vouch.extract import extract
 from vouch.ingest import ingest, resolve_repo
 from vouch.judge import JudgeError, build_provider_chain, judge
 from vouch.judge.cache import JudgeCache
+from vouch.l2.metrics import derive_metrics
+from vouch.l2.parser import parse_log_dir
+from vouch.l2.preview import render_payload, render_preview
 from vouch.report import build_report, to_json, to_markdown
 
 app = typer.Typer(help="vouch — evidence-backed capability reports from real commits.")
@@ -66,6 +69,46 @@ def run(
 
     if markdown:
         typer.echo("\n" + to_markdown(report))
+
+
+@app.command("sessions")
+def sessions(
+    log_dir: str | None = typer.Option(
+        None, "--log-dir", help="Session log root (default: ~/.claude/projects)."
+    ),
+    out: str | None = typer.Option(
+        None, "--out", help="Write the confirmed payload to this path."
+    ),
+    yes: bool = typer.Option(
+        False, "--yes", help="Skip the confirmation prompt (for scripted runs)."
+    ),
+    dry_run: bool = typer.Option(
+        False, "--dry-run", help="Show the payload and exit without confirming."
+    ),
+) -> None:
+    """Derive session telemetry locally, show exactly what would be uploaded, and confirm.
+
+    Raw logs and source code never leave this machine: the payload schema carries no
+    free-text field, so there is nothing for them to travel in. If the log format is not
+    understood, this degrades to git-only mode and emits coverage counters with no rates.
+    """
+    result = parse_log_dir(Path(log_dir) if log_dir else None)
+    metrics = derive_metrics(result)
+
+    typer.echo(render_preview(result, metrics))
+
+    if dry_run:
+        raise typer.Exit(0)
+    if not yes and not typer.confirm("Upload these metrics?", default=False):
+        typer.echo("aborted — nothing was uploaded", err=True)
+        raise typer.Exit(1)
+
+    payload = render_payload(metrics)
+    if out:
+        Path(out).write_text(payload)
+        typer.echo(f"wrote {out}", err=True)
+    else:
+        typer.echo(payload)
 
 
 @app.command("eval")
