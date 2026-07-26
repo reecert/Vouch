@@ -24,11 +24,16 @@ from pydantic import BaseModel, Field
 
 
 class CommitRecord(BaseModel):
-    """One non-merge commit, normalized. The deterministic unit extractors reason over."""
+    """One non-merge commit, normalized. The deterministic unit extractors reason over.
+
+    Author identity is mailmap-resolved at parse time (git's own sanctioned aliasing).
+    Committer fields are carried separately because the *gap* between author and committer
+    date is how L1 detects a rebase-rewritten history.
+    """
 
     sha: str
     author_name: str
-    author_email: str  # canonical identity key
+    author_email: str  # canonical identity key, mailmap-resolved
     authored_at: datetime
     subject: str
     files: list[str] = Field(default_factory=list)
@@ -36,6 +41,10 @@ class CommitRecord(BaseModel):
     # If this commit is a git revert, the SHA it reverts (parsed from the body at
     # ingest time; the raw body is discarded). None otherwise.
     reverts_sha: str | None = None
+    # Committer identity/date. Rebase preserves the author date and rewrites these, so a
+    # large, widespread committed_at - authored_at gap means the history was replayed.
+    committer_email: str = ""
+    committed_at: datetime | None = None
 
 
 class RepoSnapshot(BaseModel):
@@ -51,6 +60,11 @@ class RepoSnapshot(BaseModel):
     head_sha: str
     commits: list[CommitRecord] = Field(default_factory=list)
     ingested_at: datetime
+    # Repo-level facts the confound detectors need. Merge commits are excluded from
+    # ``commits`` (we walk with --no-merges), but their *count* is evidence: a repo with
+    # hundreds of commits and zero merges was squash-merged or rebase-merged.
+    n_merge_commits: int = 0
+    is_shallow: bool = False
 
 
 # --------------------------------------------------------------------------------------
