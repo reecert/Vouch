@@ -1,6 +1,6 @@
 # Rebuild plan
 
-Status: **live document.** Phases 1a–1c done; 1d built but uncalibrated; 1e not started.
+Status: **live document.** Phases 1a–1c and 1e done; 1d built but uncalibrated.
 See Part 4 for the phase table and Part 5 for what is still open.
 
 Companion doc: [`baseline-competitor.md`](./baseline-competitor.md) (competitor quality baseline).
@@ -370,7 +370,7 @@ later phase's output existing.
 | **1b** | **L2 CLI.** Versioned JSONL parser, derived metrics, upload-preview + confirmation, fail-soft to git-only. | ✅ **Done.** 34 tests. Payload-closure test walks the *schema* (not a sample) and fails on any free-text field; parser degrades cleanly on missing, mutated and non-session logs. Validated against 17,236 real records. |
 | **1c** | **L3 join.** Local join, match scoring, three-valued corroboration verdict, labelled join set + precision/recall harness. | ✅ **Done.** 21 tests. Correct on all 10 labelled cases (ground truth known by construction); harness nonetheless reports `insufficient_n` at n=10. Many-to-many, no-match, wrong-project, clock-skew and both sides of the overlap floor covered. |
 | **1d** | **L4 judge.** Diff-level prompts, strict output schema with the verdict enum, SHA+path grounding validator, support check, judge cache, eval labels populated. | ⚠️ **Built, not calibrated.** 33 tests; harness ported to dimension verdicts and the v0 pipeline deleted. `insufficient_evidence` observed firing on a genuinely thin history; grounding, support check and the over-eager adversary all pass. **The holdout is still empty** — §5 q8. Treat L4's calibration as unmeasured. |
-| **1e** | **L5 web app.** Next.js report, frozen share snapshot, Limitations + Risks-to-probe sections. | A public repo goes end-to-end to a shareable read-only URL. |
+| **1e** | **L5 web app.** Next.js report, frozen share snapshot, Limitations + Risks-to-probe sections. | ✅ **Done.** 19 tests. A repo goes end-to-end to a frozen `/p/<id>` snapshot; `next build` statically exports it and the HTML carries every required section. Limitations are derived from confounds/sampling/absent layers rather than volunteered by the model. |
 
 **Explicit non-goals for phase 1**, per the brief — not built, not stubbed, not designed around:
 employer workspaces, job postings, candidate directory, any two-sided marketplace mechanic, auth
@@ -524,5 +524,4 @@ Lower stakes, flagged now so they do not surprise later:
    invented shape — which does **not** soften risk 6 above: one local sample is not a format
    guarantee, and the versioned-parser/fail-soft design stands.
 
-11. **Naming.** `vouch` is a working name inherited from the prototype. Keeping it through phase 1
-   unless told otherwise.
+11. ~~**Naming.**~~ **Settled 2026-07-26:** the repository was renamed `Aiapp` -> `vouch`.
