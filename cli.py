@@ -1,7 +1,6 @@
 """vouch CLI — a thin typer adapter over the library. All logic lives in ``vouch/``."""
 from __future__ import annotations
 
-import json
 from pathlib import Path
 
 import typer
@@ -23,6 +22,7 @@ from vouch.l3.join import join
 from vouch.l4.judge import JudgeError, judge_profile
 from vouch.l4.prompt import PROMPT_VERSION
 from vouch.l4.providers import build_default_provider
+from vouch.l5.profile import build_profile
 
 app = typer.Typer(help="vouch — evidence-backed capability profiles from real commits.")
 
@@ -76,11 +76,16 @@ def profile(
         help="Correlate against session logs in this directory (local join, L3).",
     ),
     out: str | None = typer.Option(None, "--out", help="Write the JSON to this path."),
+    web_dir: str | None = typer.Option(
+        None,
+        "--web-dir",
+        help="Also write the snapshot into a viewer's data directory (web/data/profiles).",
+    ),
 ) -> None:
-    """Run the full pipeline: facts -> corroboration -> diff-level judgment.
+    """Run the full pipeline: facts -> corroboration -> diff-level judgment -> profile.
 
-    Dimensions that depend on session telemetry report ``not_assessed`` when it is absent,
-    rather than being guessed at.
+    Emits the shareable profile document. Dimensions that depend on session telemetry
+    report ``not_assessed`` when it is absent, rather than being guessed at.
     """
     repo_path = resolve_repo(repo_url)
     snapshot = ingest(repo_url)
@@ -109,21 +114,22 @@ def profile(
         typer.echo("(run `vouch facts` to inspect the deterministic layer)", err=True)
         raise typer.Exit(1) from e
 
-    payload = json.dumps(
-        {
-            "facts": json.loads(facts_result.model_dump_json()),
-            "corroboration": (
-                json.loads(corroboration.model_dump_json()) if corroboration else None
-            ),
-            "judgment": json.loads(result.model_dump_json()),
-        },
-        indent=2,
-    )
+    profile_doc = build_profile(facts_result, result, metrics, corroboration)
+    payload = profile_doc.model_dump_json(indent=2)
+
+    if web_dir:
+        target = Path(web_dir) / f"{profile_doc.profile_id}.json"
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(payload)
+        typer.echo(f"wrote {target}", err=True)
+
     if out:
         Path(out).write_text(payload)
         typer.echo(f"wrote {out}", err=True)
-    else:
+    elif not web_dir:
         typer.echo(payload)
+
+    typer.echo(f"share link: {profile_doc.share_path}", err=True)
 
 
 @app.command("sessions")

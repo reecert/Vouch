@@ -1,0 +1,141 @@
+{
+  "schema_version": "l5/1",
+  "profile_id": "c873f3c18cfc7dc8",
+  "subject": "alice@example.com",
+  "evidence_inspected": {
+    "repo": "fixture://example/with-telemetry",
+    "head_sha": "753b3cefad67412c501522a0c8f57af5cd221e2c",
+    "window_first": "2024-01-01",
+    "window_last": "2024-02-20",
+    "n_commits_by_subject": 12,
+    "n_commits_in_repo": 14,
+    "n_diffs_read": 14,
+    "n_diffs_available": 14,
+    "n_sessions": 20,
+    "session_telemetry": true,
+    "excluded_paths": {
+      "docs": 1,
+      "lockfile": 1
+    },
+    "measured_facts": 5,
+    "withheld_facts": 0
+  },
+  "findings": [
+    {
+      "dimension": "verification_discipline",
+      "verdict": "strong",
+      "confidence": "high",
+      "summary": "Returns to their own defects and ships tests with the fix.",
+      "claims": [
+        {
+          "text": "Returned to repair their own code and shipped a test with it.",
+          "locators": [
+            {
+              "sha": "18da6f13ed6d37a2639a572f6662c90d89c6c19d",
+              "path": "src/ratelimit.py"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        "Based on one repository."
+      ],
+      "risks_to_probe": [
+        "Ask how they handle a defect found in someone else's code."
+      ]
+    },
+    {
+      "dimension": "ownership",
+      "verdict": "strong",
+      "confidence": "high",
+      "summary": "Returns to their own defects and ships tests with the fix.",
+      "claims": [
+        {
+          "text": "Returned to repair their own code and shipped a test with it.",
+          "locators": [
+            {
+              "sha": "18da6f13ed6d37a2639a572f6662c90d89c6c19d",
+              "path": "src/ratelimit.py"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        "Based on one repository."
+      ],
+      "risks_to_probe": [
+        "Ask how they handle a defect found in someone else's code."
+      ]
+    },
+    {
+      "dimension": "scope_control",
+      "verdict": "strong",
+      "confidence": "high",
+      "summary": "Returns to their own defects and ships tests with the fix.",
+      "claims": [
+        {
+          "text": "Returned to repair their own code and shipped a test with it.",
+          "locators": [
+            {
+              "sha": "18da6f13ed6d37a2639a572f6662c90d89c6c19d",
+              "path": "src/ratelimit.py"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        "Based on one repository."
+      ],
+      "risks_to_probe": [
+        "Ask how they handle a defect found in someone else's code."
+      ]
+    },
+    {
+      "dimension": "planning_discipline",
+      "verdict": "strong",
+      "confidence": "high",
+      "summary": "Returns to their own defects and ships tests with the fix.",
+      "claims": [
+        {
+          "text": "Returned to repair their own code and shipped a test with it.",
+          "locators": [
+            {
+              "sha": "18da6f13ed6d37a2639a572f6662c90d89c6c19d",
+              "path": "src/ratelimit.py"
+            }
+          ]
+        }
+      ],
+      "limitations": [
+        "Based on one repository."
+      ],
+      "risks_to_probe": [
+        "Ask how they handle a defect found in someone else's code."
+      ]
+    }
+  ],
+  "risks_to_probe": [
+    "Ask how they handle a defect found in someone else's code."
+  ],
+  "corroboration": {
+    "ran": true,
+    "n_commits": 14,
+    "n_corroborated": 0,
+    "n_ambiguous": 0,
+    "n_uncorroborated": 14
+  },
+  "confounds": [],
+  "limitations": [
+    "This profile reads a git history and, with consent, local session telemetry. No private production logs, employer references, code review discussion, or live pair-programming evidence were used.",
+    "It describes observable behaviour in the evidence provided. It does not predict performance, and it is not a hiring decision.",
+    "Based on a single repository (/var/folders/qn/myx3dwjs6z55b5mhyxykjq3m0000gn/T/tmpad9a3c6d/repo) and the 12 commits authored there by this person.",
+    "0 of 14 commits have session evidence behind them. Uncorroborated means no session was recorded for that work — not that the work was unsupervised."
+  ],
+  "provenance": {
+    "l1_schema": "l1/1",
+    "judge_model": "mock:honest",
+    "prompt_version": "l4-diff/1",
+    "downgrades": [],
+    "generated_at": "2026-07-26T12:00:00"
+  }
+}

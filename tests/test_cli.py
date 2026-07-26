@@ -126,3 +126,46 @@ def test_profile_fails_loud_without_a_provider(tmp_path: Path, monkeypatch) -> N
     assert result.exit_code == 1
     assert "judge failed" in result.output
     assert "vouch facts" in result.output
+
+
+def test_profile_runs_end_to_end_to_a_share_link(tmp_path: Path, monkeypatch) -> None:
+    """A repo goes all the way to a frozen, shareable snapshot — the 1e exit criterion.
+
+    The judge is a bound mock, so this exercises the full assembly offline.
+    """
+    from vouch.ingest import ingest
+    from vouch.l1.extract import extract_facts
+    from vouch.l4.diffs import extract_diff
+    from vouch.l4.grounding import build_allowlist
+    from vouch.l4.mock import MockJudgeProvider, MockMode
+    from vouch.l4.sampling import select_commits
+
+    repo = tmp_path / "repo"
+    repos.healthy(repo)
+
+    snapshot = ingest(str(repo), cache_dir=tmp_path / "cache")
+    facts = extract_facts(snapshot, SUBJECT, repo)
+    provider = MockJudgeProvider(MockMode.HONEST)
+    sample = select_commits(snapshot.commits, facts)
+    provider.bind(build_allowlist(facts, [extract_diff(repo, c) for c in sample.commits]))
+    monkeypatch.setattr("cli.build_default_provider", lambda: provider)
+
+    web_dir = tmp_path / "profiles"
+    result = runner.invoke(
+        app,
+        ["profile", str(repo), "--author", SUBJECT, "--web-dir", str(web_dir)],
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "share link: /p/" in result.output
+
+    written = list(web_dir.glob("*.json"))
+    assert len(written) == 1
+
+    profile = json.loads(written[0].read_text())
+    assert profile["subject"] == SUBJECT
+    assert profile["profile_id"] == written[0].stem
+    assert profile["limitations"]
+    assert profile["risks_to_probe"]
+    # The guarantee that survives all the way to the shared artefact.
+    assert "score" not in profile
