@@ -1,0 +1,76 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write   # create the GitHub Release
+  id-token: write   # PyPI trusted publishing (OIDC)
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.meta.outputs.version }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install tooling
+        run: pip install build -e ".[dev]"
+
+      # Never ship a red build: gate the release on lint + tests.
+      - name: Lint
+        run: ruff check .
+      - name: Configure git identity
+        run: |
+          git config --global user.email "ci@example.com"
+          git config --global user.name "CI"
+      - name: Test
+        run: pytest -q
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: Record version
+        id: meta
+        run: echo "version=${GITHUB_REF_NAME}" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: dist
+          path: dist/*
+
+  github-release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          generate_release_notes: true
+
+  # Optional: publish to PyPI via trusted publishing. Runs only if a `pypi`
+  # environment is configured on the repo; otherwise it is skipped, so the
+  # release never fails for lack of PyPI credentials.
+  pypi-publish:
+    needs: build
+    runs-on: ubuntu-latest
+    if: ${{ vars.PYPI_PUBLISH == 'true' }}
+    environment: pypi
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: dist
+          path: dist
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

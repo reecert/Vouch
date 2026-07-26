@@ -1,0 +1,18 @@
+# Frozen, hand-labeled ownership set. The crux of Phase 5.
+#
+# Split into two disjoint pools:
+#   train    — the ONLY pool you may iterate the prompt against.
+#   holdout  — touched exactly once, for the final reported metrics. Never tune on it.
+#
+# Each entry:
+#   repo:   public git repo URL (or local path for fixtures)
+#   author: canonical git author email under evaluation
+#   label:  strong | weak            (the ground-truth ownership verdict)
+#   reason: one-line, falsifiable justification drawn from the commits.
+#           REQUIRED. Validation fails without it. "vibes" is not a reason — point at the
+#           behavior in the history that a skeptic could check.
+#
+# Populate live before the calibration run. Kept empty here so the harness's
+# empty-holdout refusal and <15-labels warning are the tested default state.
+train: []
+holdout: []
