@@ -1,0 +1,439 @@
+# The calibration corpus: ten real public repos, one target author each.
+#
+# Selected 2026-07-26 for phase 1f. Every claim below about a repo's shape was MEASURED by
+# running `vouch.l1.confounds.compute_stats` + `detect_confounds` — the same code the
+# pipeline uses — against a real clone, not asserted from memory. The `measured:` block on
+# each entry is that output, and `head:` pins the commit it was measured at.
+#
+# Why these ten. The corpus has to contain each way a real history lies to the extractor,
+# because a corpus of well-behaved repos would only teach us that the judge works on
+# well-behaved repos. Five axes, two repos each:
+#
+#   solo         ownership is structurally meaningless — nobody else wrote the code, so
+#                "fixes their own bugs" is the only option available. L1 suppresses
+#                `ownership_loop` outright (INVALIDATING). Both picks are otherwise RICH,
+#                which is the point: the judge is handed plenty of evidence and must still
+#                decline on ownership specifically.
+#   squash       authorship collapses to whoever merged, so the fix-then-test commit pairs
+#                `ownership_loop` looks for do not exist as separate commits.
+#   team         many authors, heavy PR/merge flow, individual signal diluted by review.
+#   thin/stale   `insufficient_evidence` is the CORRECT answer. Not a trick: the
+#                denominators genuinely are not there.
+#   rich         long, active, high-volume histories where a conclusive verdict is
+#                legitimately available — the control for the thin rows. Without these the
+#                corpus would only reward declining.
+#
+# The axes are a SAMPLING STRATEGY, NOT A PARTITION. Three repos fire
+# `unresolved_identity_aliases` incidentally; `records` and `flask` fire nothing at all.
+# The `measured:` block is the truth; `axis:` only records why the repo was reached for.
+#
+# NO ADDRESS IS STORED HERE. Each row names its subject by a SELECTOR — the n-th most
+# prolific non-bot author at the pinned head, guarded by a short digest of the address —
+# and `vouch.eval.corpus.resolve_author` turns that into an address by reading the clone.
+# The addresses are already public in the repos they were written in; that is not a reason
+# to copy ten third-party addresses into this one. See `notes.privacy` at the bottom.
+#
+# NO VERDICTS LIVE IN THIS FILE. Labels go in labels.yaml, written by a human through the
+# blind labeling CLI, and the train/holdout split is declared there — not here — so that
+# choosing the corpus and labeling it stay separate acts.
+
+schema_version: eval/repos/1
+measured_at_config: "6f2b5501a1b2"   # L1Config.fingerprint() at selection time
+
+repos:
+  # ---- solo: ownership_loop is suppressed as INVALIDATING ---------------------------
+  - id: hunter
+    axis: solo
+    repo: https://github.com/ionelmc/python-hunter.git
+    author:
+      by: commit_rank
+      rank: 1          # of 11 non-bot authors at head
+      email_sha256: "1aef2e932972"
+    aliases: []
+    head: b29fb483a1
+    measured:
+      subject_commits: 1131
+      human_commits: 1152
+      distinct_human_authors: 11
+      subject_share: 0.98
+      window_days: 3812
+      confounds: [solo_repo]
+      facts_surviving:
+        ownership_loop: not_assessable
+        revert_rate: 0.002
+        test_accompanies_fix: 0.244
+        followup_latency: 2.0
+        commit_scoping: 2.0
+    why: >
+      98% of human commits over 10.4 years, and the ten other contributors are drive-by
+      one-commit authors. The strongest solo case found: evidence is abundant (229
+      fix-keyword commits) while ownership is exactly as meaningless as in a one-commit
+      repo. Separates "declines because there is little to read" from "declines because
+      this particular measurement cannot mean anything here".
+
+  - id: svcs
+    axis: solo
+    repo: https://github.com/hynek/svcs.git
+    author:
+      by: commit_rank
+      rank: 1          # of 9 non-bot authors at head
+      email_sha256: "4122664a9178"
+    aliases: []
+    head: e2e2471b38
+    measured:
+      subject_commits: 661
+      human_commits: 669
+      distinct_human_authors: 9
+      subject_share: 0.99
+      window_days: 1109
+      confounds: [solo_repo]
+      facts_surviving:   # from a full extract_facts run
+        ownership_loop: not_assessable
+        revert_rate: 0.002
+        test_accompanies_fix: 0.164
+        followup_latency: 24.0
+        commit_scoping: 1.0
+    why: >
+      99% solo and still active (last commit 2026-07-26). Chosen as the second solo case
+      because it is recent and small-scoped, where hunter is old and large — so the pair
+      does not confound "solo" with "ancient". `test_accompanies_fix` measures a LOW 0.164
+      here, which makes it a useful check that the judge will report a weak number as weak
+      instead of rounding a solo maintainer up.
+
+  # ---- squash-merged: authorship collapses to the merger ----------------------------
+  - id: httpx
+    axis: squash
+    repo: https://github.com/encode/httpx.git
+    author:
+      by: commit_rank
+      rank: 1          # of 258 non-bot authors at head
+      email_sha256: "23b40f5508a1"
+    aliases: []
+    head: b5addb64f0
+    measured:
+      subject_commits: 671
+      human_commits: 1335
+      distinct_human_authors: 258
+      squash_marker_share: 0.81
+      window_days: 2357
+      confounds: [squash_merge_history]
+      facts_surviving:
+        ownership_loop: 0.85      # 17/20 — note this SURVIVES the WARN
+        revert_rate: 0.002
+        test_accompanies_fix: 0.61
+        followup_latency: 92.0
+        commit_scoping: 2.0
+    why: >
+      81% of subjects carry GitHub's " (#123)" squash marker — the highest clean squash
+      signal found. The important property: squash is WARN, not INVALIDATING, so
+      `ownership_loop` passes through at a flattering 0.85 with only a caveat attached.
+      This is the corpus's sharpest overclaim trap — a high number the reader is
+      simultaneously told to discount.
+
+  - id: black
+    axis: squash
+    repo: https://github.com/psf/black.git
+    author:
+      by: commit_rank
+      rank: 2          # of 555 non-bot authors at head
+      email_sha256: "cc5d4b689610"
+    aliases: []
+    head: db2e3e7b31
+    measured:
+      subject_commits: 202
+      human_commits: 2088
+      distinct_human_authors: 555
+      squash_marker_share: 0.77
+      window_days: 2933
+      confounds: [squash_merge_history]
+      facts_surviving:
+        ownership_loop: 0.833     # 5/6 — survives the WARN on an n of 6, as httpx does on 20
+        revert_rate: 0.0
+        test_accompanies_fix: 0.667
+        followup_latency: 62.5
+        commit_scoping: 2.5
+    why: >
+      77% squash markers, but unlike httpx the subject is a core reviewer rather than the
+      project owner (202 of 2088 human commits), and the repo has only 2 merge commits —
+      a pure squash workflow. Pairs with httpx to separate "squashed" from "owns the repo".
+
+  # ---- team with review: individual signal diluted ----------------------------------
+  - id: pytest
+    axis: team
+    repo: https://github.com/pytest-dev/pytest.git
+    author:
+      by: commit_rank
+      rank: 3          # of 1153 non-bot authors at head
+      email_sha256: "984f7f2e5808"
+    aliases: []
+    head: 36704f9b54
+    measured:
+      subject_commits: 1131
+      human_commits: 12294
+      distinct_human_authors: 1153
+      merge_commits: 4529
+      window_days: 2505
+      confounds: [unresolved_identity_aliases]
+      facts_surviving:
+        ownership_loop: 0.532
+        revert_rate: 0.008
+        test_accompanies_fix: 0.301
+        followup_latency: 119.0
+        commit_scoping: 2.0
+    why: >
+      The most team-shaped repo found: 1153 human authors, 4529 merge commits, and the
+      top author holds only 16%. The subject is one core dev among many, active to
+      2026-06. `unresolved_identity_aliases` fires here incidentally and is left
+      unclaimed on purpose — see notes.aliases.
+
+  - id: flask
+    axis: team
+    repo: https://github.com/pallets/flask.git
+    author:
+      by: commit_rank
+      rank: 3          # of 865 non-bot authors at head
+      email_sha256: "b753ea549397"
+    aliases: []
+    head: 36e4a824f3
+    measured:
+      subject_commits: 133
+      human_commits: 3661
+      distinct_human_authors: 865
+      merge_commits: 1727
+      window_days: 2213
+      confounds: []          # from detect_confounds ONLY — see facts_surviving below
+      facts_surviving:
+        ownership_loop: suppressed_low_n   # 0/1 fix commits, under the floor of 3
+        revert_rate: 0.007
+        test_accompanies_fix: 0.226
+        followup_latency: 0.0
+        commit_scoping: 1.0
+      confounds_after_extract: [low_denominator]
+    why: >
+      Selected as the corpus's control case — 133 commits over 6 years inside a heavily
+      reviewed repo, with no confound DETECTOR firing — and a full extract has since shown
+      it does not serve that role. Only ONE of the subject's fix commits reaches the
+      ownership denominator, so `ownership_loop` is suppressed by the min-n floor, which
+      raises `low_denominator` at extract time (that confound comes from
+      `_low_denominator_confound` in the extractor, not from `detect_confounds`, which is
+      why the `measured:` block above reports a clean list and is not wrong to). The
+      consequence: the corpus has NO row that hands the judge an unobstructed path to a
+      conclusive verdict on ownership, and the control the axis was meant to supply is
+      missing. Do not read this row as one. A history that closed in 2018, so the
+      target will not drift under us.
+
+  # ---- thin / stale: insufficient_evidence is the CORRECT answer --------------------
+  - id: unp
+    axis: thin
+    repo: https://github.com/mitsuhiko/unp.git
+    author:
+      by: commit_rank
+      rank: 1          # of 2 non-bot authors at head
+      email_sha256: "161ace72b12a"
+    aliases: []
+    head: 199df7b1e1
+    measured:
+      subject_commits: 11
+      human_commits: 13
+      distinct_human_authors: 2
+      window_days: 0
+      confounds: [low_denominator, short_window]
+      facts_surviving:
+        ownership_loop: suppressed_low_n
+        revert_rate: 0.0          # 0/11
+        test_accompanies_fix: suppressed_low_n
+        followup_latency: suppressed_low_n
+        commit_scoping: 1.0
+    why: >
+      A finished-in-two-days weekend project, dead since 2014-08-26, 5 files. Three of
+      five facts are suppressed by the min-n floors before any model runs. The
+      unambiguous floor of the corpus: if the judge reaches a conclusive verdict on
+      ownership or verification here, that is a gross overclaim and nothing else.
+
+  - id: records
+    axis: thin
+    repo: https://github.com/kennethreitz/records.git
+    author:
+      by: commit_rank
+      rank: 3          # of 50 non-bot authors at head
+      email_sha256: "506431978aad"
+    aliases: []
+    head: ea4273695c
+    measured:
+      subject_commits: 11
+      human_commits: 303
+      distinct_human_authors: 50
+      window_days: 282
+      confounds: [low_denominator]
+      facts_surviving:
+        ownership_loop: suppressed_low_n
+        revert_rate: 0.0
+        test_accompanies_fix: suppressed_low_n   # 2/2 — a real 100% the floor refuses
+        followup_latency: suppressed_low_n
+        commit_scoping: 1.0
+    why: >
+      The harder thin case, and deliberately not a clone of unp. A drive-by contributor:
+      11 commits in two bursts (2016-02, 2016-11) in a repo that has since gone stale.
+      `test_accompanies_fix` is 2/2 — a literal 100% that the floor suppresses rather
+      than rounds, which is precisely the "100% from n=1" failure the floors exist for.
+      Note L1 reports NO confound flag here beyond low_denominator: this row tests the
+      min-n mechanism, not the confound mechanism, which is why it is not redundant with
+      unp.
+
+  # ---- rich and active: a conclusive verdict is legitimately available --------------
+  - id: sqlite-utils
+    axis: rich
+    repo: https://github.com/simonw/sqlite-utils.git
+    author:
+      by: commit_rank
+      rank: 1          # of 53 non-bot authors at head
+      email_sha256: "db9d769c0103"
+    aliases: []
+    head: 6a456830ca
+    measured:
+      subject_commits: 1042
+      human_commits: 1170
+      distinct_human_authors: 53
+      subject_share: 0.89
+      window_days: 2916
+      confounds: [unresolved_identity_aliases]
+      facts_surviving:
+        ownership_loop: 0.720     # 18/25 — computed, not suppressed, at 89% authorship
+        revert_rate: 0.001
+        test_accompanies_fix: 0.294
+        followup_latency: 2.0
+        commit_scoping: 2.0
+    why: >
+      1042 commits and 146 fix-keyword commits over 8 years, active to 2026-07-25. Sits
+      at 89% authorship — deliberately just UNDER the 0.95 solo threshold, so
+      `ownership_loop` is computed rather than suppressed in a repo that is nearly solo.
+      See notes.finding_solo_threshold: this near-miss is the single most interesting row
+      in the corpus.
+
+  - id: pyinfra
+    axis: rich
+    repo: https://github.com/Fizzadar/pyinfra.git
+    author:
+      by: commit_rank
+      rank: 2          # of 233 non-bot authors at head
+      email_sha256: "272c6e871610"
+    aliases: []
+    head: d4db499e83
+    measured:
+      subject_commits: 1211
+      human_commits: 4362
+      distinct_human_authors: 233
+      window_days: 2161
+      confounds: [unresolved_identity_aliases]
+      facts_surviving:
+        ownership_loop: 0.641
+        revert_rate: 0.001
+        test_accompanies_fix: 0.337
+        followup_latency: 52.0
+        commit_scoping: 1.0
+    why: >
+      1211 commits under this address, active to 2026-07-24, in a 233-author repo — rich
+      without being solo (44% top-author share). Also the corpus's genuine split-identity
+      case: the same human commits under three addresses — the selected one plus two more
+      carrying a further 2209 commits, one of which outranks it — confirmed by matching
+      author names in the log. Left unclaimed on purpose — see notes.aliases. Note the
+      consequence for the selector: rank 2 is this person's *largest* address, not their
+      whole output, which is exactly the understatement the confound flags.
+
+# ---------------------------------------------------------------------------------------
+notes:
+  aliases: >
+    Every `aliases:` list is EMPTY on purpose, and that is a choice with consequences.
+    Claiming an alias set would raise the subject's commit count and change every
+    denominator, so populating it here would be quietly editing the evidence. Left empty,
+    `unresolved_identity_aliases` fires (WARN, understates) on pytest, sqlite-utils and
+    pyinfra, and the judge is told the count is a floor. If a later pass claims them, that
+    is a different corpus and the labels do not transfer.
+
+  finding_solo_threshold: >
+    NOT A CODE CHANGE — reported, not acted on, because phase 1f adds no features.
+    `Detection.solo_authorship_share` is 0.95. Across every real public repo probed for
+    this corpus, essentially nothing reaches it: funcy 94%, hynek/doc2dash 94%,
+    sqlite-utils 89%, django-cacheops 84%, shot-scraper 89%. Real single-maintainer
+    projects accumulate drive-by contributors and land in the 84-94% band. The two repos
+    that DO fire (98%, 99%) were found only by searching for them specifically. So in
+    practice `solo_repo` fires on fixtures and near-never on the histories users will
+    actually connect, and `ownership_loop` is reported unsuppressed for maintainers whose
+    ownership number is nearly as meaningless as a true solo repo's. sqlite-utils is in
+    the corpus precisely to put a label on that band. Do not retune the threshold before
+    the labels exist — the labels are the evidence for what it should be.
+
+  finding_commit_scoping_resolution: >
+    ALSO REPORTED, NOT ACTED ON. `commit_scoping` is a median count of significant files
+    per commit. Now that all ten rows have been extracted, it takes three values across the
+    corpus: 1.0 on five (svcs, flask, unp, records, pyinfra), 2.0 on four (httpx, hunter,
+    sqlite-utils, pytest) and 2.5 on one (black — a median over an even count need not be an
+    integer). An earlier partial probe recorded "1.0 on eight of ten, 2.0 on httpx"; that was
+    written before the six large rows were extracted and is superseded by this. The concern
+    survives in weaker form: three values over ten real repos is coarse, so `scope_control` —
+    which rests on this fact plus one L2 metric — has little room to discriminate between
+    candidates. Worth knowing BEFORE reading its agreement number, so that a high
+    exact-agreement score on `scope_control` is not mistaken for the dimension working.
+
+  prediction_scope_control_agreement: >
+    A PREDICTION, RECORDED BEFORE ANY LABEL EXISTS so that it cannot be rationalised
+    afterwards: whatever agreement number `scope_control` scores in phase 1f, that number
+    is NOT INTERPRETABLE as evidence that the dimension works. The reason is in
+    notes.finding_commit_scoping_resolution — `commit_scoping` takes three distinct values
+    (1.0, 2.0, 2.5) across ten real repos, and five of the ten share the single value 1.0.
+    A fact that coarse cannot separate candidates, so the labels it feeds will themselves
+    cluster, and a judge that lands on the modal band every time will score high exact
+    agreement while discriminating nothing. High agreement here is therefore consistent
+    with the dimension being inert, and cannot distinguish the two.
+    What would distinguish them, and what to report instead of a bare agreement figure:
+    (a) agreement measured against the majority-class baseline — the score from always
+    predicting the most common `scope_control` label — with the dimension counted as
+    working only if it beats that baseline by a margin the n supports; (b) the confusion
+    matrix, not the diagonal, showing whether any non-modal label is ever predicted
+    correctly; (c) the same two numbers for a dimension resting on a finer fact, as a
+    control on the harness itself.
+    If this prediction is wrong — if `scope_control` shows real spread across bands — that
+    is a genuine finding about the fact's resolution and should be recorded as one. The
+    prediction is here to make that outcome falsifiable, not to pre-empt it.
+
+  confounds_not_covered: >
+    The five requested axes leave four of L1's nine detectors unexercised:
+    `bot_dominated`, `vendored_or_generated_bulk`, `rebase_rewritten_authorship` and
+    `shallow_history`. Nothing in this corpus licenses a claim about the judge's behaviour
+    when those fire. Candidates seen while probing, if a later pass wants them:
+    simonw/til (27% bot commits) and psf/black (9%).
+
+  cost: >
+    Full `extract_facts` is dominated by blame. Measured on these clones, all ten rows:
+    records 0.0s, unp 1.9s, svcs 42.5s, flask 55.0s, httpx 134.5s, sqlite-utils 135.1s,
+    black 193.3s, hunter 323.0s, pyinfra 484.5s, pytest 1249.9s. Roughly 45 minutes for a
+    full corpus pass, and cost tracks subject commits x history size rather than either
+    alone — pytest is 21 minutes on its own. The labeling harness must persist L1 output
+    rather than re-extract per session; re-extracting is not a thing a human can sit
+    through between labels.
+
+  privacy: >
+    SETTLED before this file was first committed, so no third-party address is anywhere in
+    this repository's history. An earlier draft stored the ten addresses inline and flagged
+    the problem for a decision; the decision is a runtime resolver. Each row carries a
+    selector — `commit_rank` at the pinned head, guarded by `email_sha256` — and
+    `vouch.eval.corpus.resolve_author` reads the address out of the clone when the pipeline
+    needs it. Masking (`vouch.l1.confounds.mask_email`) was the other candidate and does not
+    work here: a masked address cannot select commits, and six of the ten have no
+    `users.noreply` alternative to substitute. The digest is a consistency guard, NOT a
+    privacy claim — anyone with the clone can match it in seconds, which is exactly what the
+    resolver does. What the digest buys is a loud failure: if the ranking shifts under the
+    corpus, resolution raises instead of silently profiling a different person. What it
+    costs: reading this file no longer tells you who a row is about without a clone.
+    STILL OPEN, and the same leak by another door: `eval/labels.yaml` stores `author:` as a
+    plain address, and the labels are committed. It is empty today, so nothing has leaked
+    yet, but the first label written through the CLI puts an address in history. Either the
+    label schema keys on the corpus `id` or the CLI resolves through this file. A phase 1g
+    decision — do not start labeling before it is made.
+
+  subject_consent: >
+    docs/plan.md §5 q1 records phase 1 as subject-initiated: a profile is generated by the
+    engineer it describes. None of these ten people asked to be profiled. That is
+    defensible for measuring a judge against a human label and is NOT defensible for
+    publishing the output — no profile built from this corpus should be shared as a
+    document about that person, and none of these rows should reach L5's share links.
