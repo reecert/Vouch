@@ -408,12 +408,23 @@ Resolved:
 
 Decide before the phase that needs it:
 
-2. **Dimension set (before 1d).** The prototype has one dimension (ownership). The baseline
-   advertises nine to this same audience. The brief's L1/L2 imply roughly: ownership, verification
-   discipline, planning discipline, scope control, iteration after launch. How many ship in phase 1
-   — and is "AI collaboration" one dimension or, as the baseline treats it, a group of five?
-   Screening buyers compare like-for-like, so being visibly narrower than nine needs to read as
-   deliberate rigour rather than as missing features; the Limitations section carries that weight.
+2. ~~**Dimension set (before 1d).**~~ **Answered 2026-07-26: four, each backed by facts we
+   actually compute.** Deliberately narrower than the competitor's nine; the Limitations section
+   carries that, and every dimension can point at a denominator.
+
+   | Dimension | L1 facts | L2 metrics |
+   |---|---|---|
+   | Ownership | `ownership_loop`, `followup_latency`, `revert_rate` | — |
+   | Verification discipline | `test_accompanies_fix` | `test_or_build_after_edit` |
+   | Planning discipline | — | `plan_before_execute` |
+   | Scope control | `commit_scoping` | `edit_revision` |
+
+   Verification discipline is the one that spans both layers, so it is where corroboration is
+   visible to a reader — the same behaviour observed in the commit trail *and* in the session
+   trail. That makes it the dimension that best demonstrates the differentiator, and it should
+   lead the report. Planning discipline rests on L2 alone, so it is `not_assessed` whenever the
+   CLI was not run — stated per-dimension, following the competitor's good habit of scoping
+   coverage claims per section rather than in one global disclaimer.
 
 3. ~~**L3 join location (before 1c).**~~ **Confirmed 2026-07-26: local join.** The L2 payload is
    built on it — file paths and shell commands are parsed and retained in memory for L3 to join
@@ -421,14 +432,19 @@ Decide before the phase that needs it:
    join algorithm requires users to re-run the CLI, and corroboration cannot be re-derived
    server-side from stored data.
 
-4. **Judge cost model (before 1d).** Diff-level judgment is per-commit, so cost scales with history
-   size, not repo count. Options: judge a bounded sample of commits selected deterministically by
-   L1 (recommended — keeps cost flat and the selection auditable); judge everything; or tier it.
-   The sampling rule becomes part of the Limitations section either way.
+4. ~~**Judge cost model (before 1d).**~~ **Answered 2026-07-26: bounded deterministic sample.**
+   L1 selects a fixed-size commit sample by an auditable rule — every self-fix commit (the
+   evidence `ownership_loop` already rests on), plus a seeded sample of the remainder. Cost per
+   profile is flat regardless of history length, and the selection is reproducible from the config
+   fingerprint. The sampling rule is named in the Limitations section: a reader is told the
+   profile read *N of M* commits and how those N were chosen.
 
-5. **Provider policy (before 1d).** Recommendation is `claude-opus-5` primary with the
-   `JudgeProvider` protocol retained. Confirm that the free-tier chain (Gemini/Groq/Ollama) is
-   demoted to local-dev only, given §1.2h.
+5. ~~**Provider policy (before 1d).**~~ **Answered 2026-07-26: `claude-opus-5` primary**, with the
+   `JudgeProvider` protocol retained so the chain stays swappable. The free-tier chain
+   (Gemini/Groq/Ollama) is demoted to local development only — per §1.2h, sending real diffs and
+   derived behavioural metrics about a named individual to a train-on-input tier is not
+   defensible in a product. The eval harness continues to run offline against the mock provider,
+   so CI never spends money.
 
 Lower stakes, flagged now so they do not surprise later:
 
