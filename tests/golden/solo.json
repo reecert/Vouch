@@ -1,0 +1,138 @@
+{
+  "confounds": [
+    {
+      "affects": [
+        "ownership_loop"
+      ],
+      "detail": "subject authored 12/12 human commits (100%); 1 distinct human author(s). With no other authors, fixing one's own bugs is the only option available, so the loop carries no ownership signal.",
+      "direction": "overstates",
+      "key": "solo_repo",
+      "severity": "invalidating"
+    }
+  ],
+  "excluded_paths": {
+    "docs": 1,
+    "lockfile": 1
+  },
+  "facts": [
+    {
+      "denominator": null,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": "src/cache.py",
+          "sha": "2136098dac5ffccd75f40676b71dff2042ecc754"
+        },
+        {
+          "hunk": null,
+          "path": "src/search.py",
+          "sha": "59bc48f8c628aae1eb01f62c5fa182284f9f666d"
+        },
+        {
+          "hunk": null,
+          "path": "tests/test_search.py",
+          "sha": "59bc48f8c628aae1eb01f62c5fa182284f9f666d"
+        },
+        {
+          "hunk": null,
+          "path": "src/auth.py",
+          "sha": "6ac4f8f7dcd06ab49dc251858487d0147e47c3ad"
+        },
+        {
+          "hunk": null,
+          "path": "tests/test_auth.py",
+          "sha": "6ac4f8f7dcd06ab49dc251858487d0147e47c3ad"
+        }
+      ],
+      "key": "ownership_loop",
+      "note": "not assessable here \u2014 subject authored 12/12 human commits (100%); 1 distinct human author(s). With no other authors, fixing one's own bugs is the only option available, so the loop carries no ownership signal.",
+      "numerator": null,
+      "status": "not_assessable",
+      "unit": "fraction",
+      "value": null
+    },
+    {
+      "denominator": 12,
+      "evidence": [],
+      "key": "revert_rate",
+      "note": "",
+      "numerator": 0,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": null,
+          "sha": "59bc48f8c628aae1eb01f62c5fa182284f9f666d"
+        },
+        {
+          "hunk": null,
+          "path": null,
+          "sha": "6ac4f8f7dcd06ab49dc251858487d0147e47c3ad"
+        }
+      ],
+      "key": "test_accompanies_fix",
+      "note": "",
+      "numerator": 2,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.6667
+    },
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": "src/cache.py",
+          "sha": "2136098dac5ffccd75f40676b71dff2042ecc754"
+        },
+        {
+          "hunk": null,
+          "path": "src/search.py",
+          "sha": "59bc48f8c628aae1eb01f62c5fa182284f9f666d"
+        },
+        {
+          "hunk": null,
+          "path": "src/auth.py",
+          "sha": "6ac4f8f7dcd06ab49dc251858487d0147e47c3ad"
+        }
+      ],
+      "key": "followup_latency",
+      "note": "",
+      "numerator": null,
+      "status": "measured",
+      "unit": "days",
+      "value": 23.0
+    },
+    {
+      "denominator": 11,
+      "evidence": [],
+      "key": "commit_scoping",
+      "note": "",
+      "numerator": null,
+      "status": "measured",
+      "unit": "files",
+      "value": 1.0
+    }
+  ],
+  "head_sha": "c65a74fc4865989a163da9a4ac61dec06783cb3c",
+  "n_commits_by_subject": 12,
+  "n_commits_total": 12,
+  "repo": "fixture://solo",
+  "schema_version": "l1/1",
+  "subject": {
+    "canonical_email": "alice@example.com",
+    "emails": [
+      "alice@example.com"
+    ],
+    "names": [
+      "Alice Dev"
+    ]
+  },
+  "window_first": "2024-01-01",
+  "window_last": "2024-02-20"
+}

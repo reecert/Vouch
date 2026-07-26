@@ -19,7 +19,7 @@ Three properties are enforced structurally rather than by convention:
 from __future__ import annotations
 
 from datetime import date
-from enum import Enum
+from enum import StrEnum
 
 from pydantic import BaseModel, Field
 
@@ -57,7 +57,7 @@ class Locator(BaseModel):
         return (self.sha, self.path)
 
 
-class FactStatus(str, Enum):
+class FactStatus(StrEnum):
     """Why a fact does or does not carry a value."""
 
     MEASURED = "measured"
@@ -65,7 +65,7 @@ class FactStatus(str, Enum):
     NOT_ASSESSABLE = "not_assessable"  # a confound invalidates the measurement itself
 
 
-class Unit(str, Enum):
+class Unit(StrEnum):
     FRACTION = "fraction"
     DAYS = "days"
     FILES = "files"
@@ -94,7 +94,7 @@ class Fact(BaseModel):
         return self.status is FactStatus.MEASURED
 
 
-class ConfoundKey(str, Enum):
+class ConfoundKey(StrEnum):
     """The distortions L1 must detect before any of its numbers can be trusted."""
 
     SQUASH_MERGE_HISTORY = "squash_merge_history"
@@ -108,13 +108,13 @@ class ConfoundKey(str, Enum):
     LOW_DENOMINATOR = "low_denominator"
 
 
-class Severity(str, Enum):
+class Severity(StrEnum):
     INFO = "info"  # worth stating; changes nothing
     WARN = "warn"  # read the affected facts with caution
     INVALIDATING = "invalidating"  # the affected facts are suppressed outright
 
 
-class BiasDirection(str, Enum):
+class BiasDirection(StrEnum):
     """Which way the confound pushes the affected facts.
 
     A flag that says only "this history was squash-merged" is useless to a reader. It has
@@ -127,13 +127,19 @@ class BiasDirection(str, Enum):
 
 
 class Confound(BaseModel):
-    """A reason to distrust specific facts, with the numbers behind it."""
+    """A reason to distrust specific facts, with the numbers behind it.
+
+    ``affects`` names the fact keys this confound bears on; ``severity`` decides what
+    happens to them. At ``INVALIDATING`` the extractor suppresses those facts to
+    ``NOT_ASSESSABLE``; at ``WARN`` they are still measured but carry the caveat into the
+    report; at ``INFO`` the confound is context for the reader and changes nothing.
+    """
 
     key: ConfoundKey
     severity: Severity
     direction: BiasDirection
     detail: str  # numbers, not adjectives
-    invalidates: list[str] = Field(default_factory=list)  # fact keys
+    affects: list[str] = Field(default_factory=list)  # fact keys
 
 
 class RepoFacts(BaseModel):

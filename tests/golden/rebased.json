@@ -1,0 +1,138 @@
+{
+  "confounds": [
+    {
+      "affects": [
+        "followup_latency"
+      ],
+      "detail": "7/14 commits (50%) were committed more than 1 day(s) after they were authored, so this history was rebased or replayed. Author dates survive a rebase but the ordering they imply may not.",
+      "direction": "unknown",
+      "key": "rebase_rewritten_authorship",
+      "severity": "warn"
+    }
+  ],
+  "excluded_paths": {
+    "docs": 1,
+    "lockfile": 1
+  },
+  "facts": [
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": "src/auth.py",
+          "sha": "5bc92b5f49ddfbe0273d75a46099a269deaaaa8c"
+        },
+        {
+          "hunk": null,
+          "path": "tests/test_auth.py",
+          "sha": "5bc92b5f49ddfbe0273d75a46099a269deaaaa8c"
+        },
+        {
+          "hunk": null,
+          "path": "src/cache.py",
+          "sha": "80d8e51e86a6bb5724cc26b7d10b1a310a177c15"
+        },
+        {
+          "hunk": null,
+          "path": "src/search.py",
+          "sha": "9c22e0f6187abad8f65bc275cebb3c8592eebc6f"
+        },
+        {
+          "hunk": null,
+          "path": "tests/test_search.py",
+          "sha": "9c22e0f6187abad8f65bc275cebb3c8592eebc6f"
+        }
+      ],
+      "key": "ownership_loop",
+      "note": "",
+      "numerator": 2,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.6667
+    },
+    {
+      "denominator": 12,
+      "evidence": [],
+      "key": "revert_rate",
+      "note": "",
+      "numerator": 0,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": null,
+          "sha": "5bc92b5f49ddfbe0273d75a46099a269deaaaa8c"
+        },
+        {
+          "hunk": null,
+          "path": null,
+          "sha": "9c22e0f6187abad8f65bc275cebb3c8592eebc6f"
+        }
+      ],
+      "key": "test_accompanies_fix",
+      "note": "",
+      "numerator": 2,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.6667
+    },
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": "src/auth.py",
+          "sha": "5bc92b5f49ddfbe0273d75a46099a269deaaaa8c"
+        },
+        {
+          "hunk": null,
+          "path": "src/cache.py",
+          "sha": "80d8e51e86a6bb5724cc26b7d10b1a310a177c15"
+        },
+        {
+          "hunk": null,
+          "path": "src/search.py",
+          "sha": "9c22e0f6187abad8f65bc275cebb3c8592eebc6f"
+        }
+      ],
+      "key": "followup_latency",
+      "note": "",
+      "numerator": null,
+      "status": "measured",
+      "unit": "days",
+      "value": 23.0
+    },
+    {
+      "denominator": 11,
+      "evidence": [],
+      "key": "commit_scoping",
+      "note": "",
+      "numerator": null,
+      "status": "measured",
+      "unit": "files",
+      "value": 1.0
+    }
+  ],
+  "head_sha": "cafa7bc1068e174007fdaed6ca6b64d127aea1c1",
+  "n_commits_by_subject": 12,
+  "n_commits_total": 14,
+  "repo": "fixture://rebased",
+  "schema_version": "l1/1",
+  "subject": {
+    "canonical_email": "alice@example.com",
+    "emails": [
+      "alice@example.com"
+    ],
+    "names": [
+      "Alice Dev"
+    ]
+  },
+  "window_first": "2024-01-01",
+  "window_last": "2024-02-20"
+}

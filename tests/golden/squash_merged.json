@@ -1,0 +1,140 @@
+{
+  "confounds": [
+    {
+      "affects": [
+        "ownership_loop",
+        "followup_latency",
+        "commit_scoping"
+      ],
+      "detail": "7/14 commit subjects carry a squash marker (50%). Squash-merging collapses each branch into a single commit attributed to the merger, so individual fix-and-test commits are not visible and commits look larger than the work behind them.",
+      "direction": "understates",
+      "key": "squash_merge_history",
+      "severity": "warn"
+    }
+  ],
+  "excluded_paths": {
+    "docs": 1,
+    "lockfile": 1
+  },
+  "facts": [
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": "src/search.py",
+          "sha": "56fdfaa1ae0c510903579f62cb96d5304c0914e8"
+        },
+        {
+          "hunk": null,
+          "path": "tests/test_search.py",
+          "sha": "56fdfaa1ae0c510903579f62cb96d5304c0914e8"
+        },
+        {
+          "hunk": null,
+          "path": "src/auth.py",
+          "sha": "c7cf5060651455b1189144b841c07cc9203fc118"
+        },
+        {
+          "hunk": null,
+          "path": "tests/test_auth.py",
+          "sha": "c7cf5060651455b1189144b841c07cc9203fc118"
+        },
+        {
+          "hunk": null,
+          "path": "src/cache.py",
+          "sha": "f09c312e2552249a460dff77c28505e263cb702c"
+        }
+      ],
+      "key": "ownership_loop",
+      "note": "",
+      "numerator": 2,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.6667
+    },
+    {
+      "denominator": 12,
+      "evidence": [],
+      "key": "revert_rate",
+      "note": "",
+      "numerator": 0,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": null,
+          "sha": "56fdfaa1ae0c510903579f62cb96d5304c0914e8"
+        },
+        {
+          "hunk": null,
+          "path": null,
+          "sha": "c7cf5060651455b1189144b841c07cc9203fc118"
+        }
+      ],
+      "key": "test_accompanies_fix",
+      "note": "",
+      "numerator": 2,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.6667
+    },
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": "src/search.py",
+          "sha": "56fdfaa1ae0c510903579f62cb96d5304c0914e8"
+        },
+        {
+          "hunk": null,
+          "path": "src/auth.py",
+          "sha": "c7cf5060651455b1189144b841c07cc9203fc118"
+        },
+        {
+          "hunk": null,
+          "path": "src/cache.py",
+          "sha": "f09c312e2552249a460dff77c28505e263cb702c"
+        }
+      ],
+      "key": "followup_latency",
+      "note": "",
+      "numerator": null,
+      "status": "measured",
+      "unit": "days",
+      "value": 23.0
+    },
+    {
+      "denominator": 11,
+      "evidence": [],
+      "key": "commit_scoping",
+      "note": "",
+      "numerator": null,
+      "status": "measured",
+      "unit": "files",
+      "value": 1.0
+    }
+  ],
+  "head_sha": "2707596a3e581b0741d32b83dd908877b9358d86",
+  "n_commits_by_subject": 12,
+  "n_commits_total": 14,
+  "repo": "fixture://squash_merged",
+  "schema_version": "l1/1",
+  "subject": {
+    "canonical_email": "alice@example.com",
+    "emails": [
+      "alice@example.com"
+    ],
+    "names": [
+      "Alice Dev"
+    ]
+  },
+  "window_first": "2024-01-01",
+  "window_last": "2024-02-20"
+}

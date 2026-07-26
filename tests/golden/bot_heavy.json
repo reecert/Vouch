@@ -1,0 +1,136 @@
+{
+  "confounds": [
+    {
+      "affects": [],
+      "detail": "6/20 commits (30%) are machine authored and are excluded from every fact below. Reported because a repo can look collaborative while having one human contributor.",
+      "direction": "unknown",
+      "key": "bot_dominated",
+      "severity": "info"
+    }
+  ],
+  "excluded_paths": {
+    "docs": 1,
+    "lockfile": 1
+  },
+  "facts": [
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": "src/cache.py",
+          "sha": "8f57cbd4ab73c793b244f30b487a800709665ab7"
+        },
+        {
+          "hunk": null,
+          "path": "src/auth.py",
+          "sha": "9e660071fe419d27fe9e3c1473ad0b15f0db4644"
+        },
+        {
+          "hunk": null,
+          "path": "tests/test_auth.py",
+          "sha": "9e660071fe419d27fe9e3c1473ad0b15f0db4644"
+        },
+        {
+          "hunk": null,
+          "path": "src/search.py",
+          "sha": "a738bb4939219de81ec871d4e4a207e53aeaf40e"
+        },
+        {
+          "hunk": null,
+          "path": "tests/test_search.py",
+          "sha": "a738bb4939219de81ec871d4e4a207e53aeaf40e"
+        }
+      ],
+      "key": "ownership_loop",
+      "note": "",
+      "numerator": 2,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.6667
+    },
+    {
+      "denominator": 12,
+      "evidence": [],
+      "key": "revert_rate",
+      "note": "",
+      "numerator": 0,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": null,
+          "sha": "9e660071fe419d27fe9e3c1473ad0b15f0db4644"
+        },
+        {
+          "hunk": null,
+          "path": null,
+          "sha": "a738bb4939219de81ec871d4e4a207e53aeaf40e"
+        }
+      ],
+      "key": "test_accompanies_fix",
+      "note": "",
+      "numerator": 2,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.6667
+    },
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": "src/cache.py",
+          "sha": "8f57cbd4ab73c793b244f30b487a800709665ab7"
+        },
+        {
+          "hunk": null,
+          "path": "src/auth.py",
+          "sha": "9e660071fe419d27fe9e3c1473ad0b15f0db4644"
+        },
+        {
+          "hunk": null,
+          "path": "src/search.py",
+          "sha": "a738bb4939219de81ec871d4e4a207e53aeaf40e"
+        }
+      ],
+      "key": "followup_latency",
+      "note": "",
+      "numerator": null,
+      "status": "measured",
+      "unit": "days",
+      "value": 23.0
+    },
+    {
+      "denominator": 11,
+      "evidence": [],
+      "key": "commit_scoping",
+      "note": "",
+      "numerator": null,
+      "status": "measured",
+      "unit": "files",
+      "value": 1.0
+    }
+  ],
+  "head_sha": "23e46b25f88b9c6b708e715cc5f76928d51f46f1",
+  "n_commits_by_subject": 12,
+  "n_commits_total": 20,
+  "repo": "fixture://bot_heavy",
+  "schema_version": "l1/1",
+  "subject": {
+    "canonical_email": "alice@example.com",
+    "emails": [
+      "alice@example.com"
+    ],
+    "names": [
+      "Alice Dev"
+    ]
+  },
+  "window_first": "2024-01-01",
+  "window_last": "2024-02-20"
+}

@@ -1,0 +1,122 @@
+{
+  "confounds": [
+    {
+      "affects": [
+        "ownership_loop"
+      ],
+      "detail": "1 of 5 facts were suppressed for want of a large enough denominator (ownership_loop). This history is too thin to support them.",
+      "direction": "unknown",
+      "key": "low_denominator",
+      "severity": "warn"
+    },
+    {
+      "affects": [
+        "ownership_loop",
+        "followup_latency"
+      ],
+      "detail": "the subject's activity spans 4 day(s), under the 30-day floor. Returning to fix one's own work is a behaviour that needs elapsed time to be observable at all.",
+      "direction": "understates",
+      "key": "short_window",
+      "severity": "warn"
+    }
+  ],
+  "excluded_paths": {
+    "docs": 1,
+    "lockfile": 1
+  },
+  "facts": [
+    {
+      "denominator": 0,
+      "evidence": [],
+      "key": "ownership_loop",
+      "note": "suppressed: 0 observation(s), below the floor of 3. A rate this thin is not reported.",
+      "numerator": 0,
+      "status": "suppressed_low_n",
+      "unit": "fraction",
+      "value": null
+    },
+    {
+      "denominator": 12,
+      "evidence": [],
+      "key": "revert_rate",
+      "note": "",
+      "numerator": 0,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.0
+    },
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": null,
+          "sha": "5dad1386976fa1bafbba4669283c5916aa304e7e"
+        },
+        {
+          "hunk": null,
+          "path": null,
+          "sha": "674ba11e6ead877833bedc0cd1289c4532d7b534"
+        }
+      ],
+      "key": "test_accompanies_fix",
+      "note": "",
+      "numerator": 2,
+      "status": "measured",
+      "unit": "fraction",
+      "value": 0.6667
+    },
+    {
+      "denominator": 3,
+      "evidence": [
+        {
+          "hunk": null,
+          "path": "src/auth.py",
+          "sha": "5dad1386976fa1bafbba4669283c5916aa304e7e"
+        },
+        {
+          "hunk": null,
+          "path": "src/search.py",
+          "sha": "674ba11e6ead877833bedc0cd1289c4532d7b534"
+        },
+        {
+          "hunk": null,
+          "path": "src/cache.py",
+          "sha": "a10744028041654097c453924797a9b03dacdd15"
+        }
+      ],
+      "key": "followup_latency",
+      "note": "",
+      "numerator": null,
+      "status": "measured",
+      "unit": "days",
+      "value": 2.0
+    },
+    {
+      "denominator": 11,
+      "evidence": [],
+      "key": "commit_scoping",
+      "note": "",
+      "numerator": null,
+      "status": "measured",
+      "unit": "files",
+      "value": 1.0
+    }
+  ],
+  "head_sha": "3afd7420ab03e86b260ef7f1aeeb1b18280d37bd",
+  "n_commits_by_subject": 12,
+  "n_commits_total": 14,
+  "repo": "fixture://short_window",
+  "schema_version": "l1/1",
+  "subject": {
+    "canonical_email": "alice@example.com",
+    "emails": [
+      "alice@example.com"
+    ],
+    "names": [
+      "Alice Dev"
+    ]
+  },
+  "window_first": "2024-01-01",
+  "window_last": "2024-01-05"
+}

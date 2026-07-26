@@ -22,6 +22,10 @@ class Step:
     write: dict[str, str] = field(default_factory=dict)  # path -> full content
     delete: list[str] = field(default_factory=list)
     body: str = ""
+    # Committer date, when it must differ from the author date. Rebase preserves the
+    # author date and rewrites the committer date, so a fixture that sets this simulates
+    # a replayed history for the rebase confound detector.
+    committer_date: str | None = None
 
 
 def _run(path: Path, *args: str, env: dict[str, str] | None = None) -> str:
@@ -61,7 +65,7 @@ def build_repo(path: Path, steps: list[Step]) -> list[str]:
             GIT_COMMITTER_NAME=name,
             GIT_COMMITTER_EMAIL=email,
             GIT_AUTHOR_DATE=st.date,
-            GIT_COMMITTER_DATE=st.date,
+            GIT_COMMITTER_DATE=st.committer_date or st.date,
         )
         message = st.subject if not st.body else f"{st.subject}\n\n{st.body}"
         _run(path, "commit", "-q", "-m", message, env=env)

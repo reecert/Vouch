@@ -18,21 +18,26 @@ from dataclasses import asdict, dataclass, field
 
 __all__ = ["MinN", "Detection", "L1Config", "L1_CONFIG", "FIX_KEYWORDS"]
 
-# Subject-line markers for a defect fix. Deliberately conservative: this is a *proxy*, and
-# it is tuned to miss fixes phrased unusually rather than to invent them. L4 reads the diff
-# and can say a keyword-matched commit was not actually a fix; it cannot recover one we
-# never surfaced, so the cost of a miss is lower than the cost of a false positive.
+# Subject-line markers for a defect fix. These are **stems**: the matcher anchors them to a
+# word start and allows any suffix, so "fix" catches fixes/fixed while "prefix", "suffix"
+# and "dispatch" are correctly not fix commits (the prototype's plain substring match read
+# "refactor prefix handling" as a bug fix).
+#
+# Deliberately conservative: this is a *proxy*, tuned to miss fixes phrased unusually
+# rather than to invent them. L4 reads the diff and can say a keyword-matched commit was
+# not actually a fix; it cannot recover one we never surfaced. A miss costs less than a
+# false positive.
 FIX_KEYWORDS: tuple[str, ...] = (
     "fix",
-    "bug",
-    "bugfix",
     "hotfix",
+    "bug",
     "patch",
-    "regression",
+    "regress",
     "repair",
-    "resolve",
+    "resolv",
     "correct",
-    "broken",
+    "broke",
+    "crash",
 )
 
 
@@ -75,6 +80,10 @@ class Detection:
     rebase_skew_days: int = 1
     # short_window: subject's activity spans fewer than this many days.
     short_window_days: int = 30
+
+    # Blame is one git call per (commit, file); a squashed 400-file commit would otherwise
+    # dominate runtime. Files are taken in sorted order so the cap is deterministic.
+    max_blamed_files_per_commit: int = 25
 
 
 @dataclass(frozen=True)
