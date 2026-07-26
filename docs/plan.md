@@ -364,8 +364,8 @@ later phase's output existing.
 
 | Phase | Scope | Done means |
 |---|---|---|
-| **0** | This document + baseline. | Reviewed and approved. ← *we are here* |
-| **1a** | **L1 rebuild.** New schema, confound detection, noise filtering, identity/mailmap resolution, blame perf fix, min-n floors, byte-reproducible output. | Golden-file tests pass against confound fixtures: a squash-merged repo, a solo repo, a bot-heavy repo, a rebased repo, a lockfile-noisy repo. No LLM in the loop. |
+| **0** | This document + baseline. | ✅ **Done.** |
+| **1a** | **L1 rebuild.** New schema, confound detection, noise filtering, identity/mailmap resolution, blame perf fix, min-n floors, byte-reproducible output. | ✅ **Done.** 83 new tests; golden files over eight fixture repos (healthy, solo, squash-merged, bot-heavy, lockfile-noisy, rebased, aliased, short-window), each deforming one axis. Goldens pin real SHAs. No LLM in the loop. |
 | **1b** | **L2 CLI.** Versioned JSONL parser, derived metrics, upload-preview + confirmation, fail-soft to git-only. | Payload-closure test passes (no raw log content can reach the payload); parser degrades cleanly on a mutated log fixture. |
 | **1c** | **L3 join.** Local join, match scoring, three-valued corroboration verdict, labelled join set + precision/recall harness. | Accuracy reported with its n, under the existing honest-at-small-n rules. Many-to-many and no-match cases covered by fixtures. |
 | **1d** | **L4 judge.** Diff-level prompts, strict output schema with the verdict enum, SHA+path grounding validator, support check, judge cache, eval labels populated. | Eval harness runs on a *non-empty* holdout; `insufficient_evidence` is observed firing on thin inputs, not just supported in theory. |
@@ -438,9 +438,26 @@ Lower stakes, flagged now so they do not surprise later:
    update**, and the product has to keep working (git-only) when it does. Flagging as the single
    largest technical risk in the brief.
 
-7. **Signal semantics (1a).** Do `returned_to_own_code` and `revert_recovery` keep their current
-   loose definitions, or get the tighter corrective-return predicate (§1.2d)? Tighter is more
-   honest and will produce visibly lower numbers than the prototype does today.
+7. ~~**Signal semantics (1a).**~~ **Resolved in build: tighter predicate taken.** A "return" now
+   requires the fix to land at least `return_gap_days` (14) after the code it repairs, so
+   same-session work no longer counts as ownership. Two further calls made while building, both
+   in the same direction — under-detect rather than mislabel:
+
+   - **Squash detection rests only on GitHub's `(#123)` subject convention.** A "zero merge
+     commits across a long history" arm was implemented, fired on a plain linear fixture, and was
+     removed: it cannot distinguish a squash-merged repo from a small project with no PRs, and a
+     false squash flag tells a reader to discount numbers that are fine. Cost: a squash-merged
+     repo whose team writes its own subject lines goes undetected.
+   - **Noise share is measured over human commits only**, so a dependency bot's lockfile churn is
+     reported once (as `bot_dominated`) rather than twice.
+
+9. **L2 log parsing is verifiable, not synthesized (1b).** Confirmed 2026-07-26: this machine has
+   54 session JSONL files across 3 projects, carrying `mode`, `permission-mode`, `user`,
+   `assistant`, `attachment`, `system`, `file-history-snapshot`, `file-history-delta`,
+   `last-prompt` and `queue-operation` records. `mode`/`permission-mode` are what
+   plan-mode-before-execute reads. So 1b can be built and tested against real logs rather than an
+   invented shape — which does **not** soften risk 6 above: one local sample is not a format
+   guarantee, and the versioned-parser/fail-soft design stands.
 
 8. **Naming.** `vouch` is a working name inherited from the prototype. Keeping it through phase 1
    unless told otherwise.
