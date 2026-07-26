@@ -350,6 +350,44 @@ notes:
     pyinfra, and the judge is told the count is a floor. If a later pass claims them, that
     is a different corpus and the labels do not transfer.
 
+  finding_mailmap_is_a_no_op: >
+    MEASURED, NOT ACTED ON. The question asked: three of the four non-adversarial rows
+    (pytest, sqlite-utils, pyinfra) are blocked by `unresolved_identity_aliases` — does
+    honouring the repo's own .mailmap collapse them? The answer is no, twice over.
+    FIRST, mailmap is ALREADY honoured. `vouch.ingest._parse_commits` runs
+    `git log --use-mailmap` with `%aN`/`%aE`, so every snapshot behind the `measured:`
+    blocks above was mailmap-resolved before L1 saw it. There is no unhonoured mapping to
+    turn on; tier 1 of identity.py's three tiers is live and has been.
+    SECOND, there is almost nothing to honour. Exactly ONE of the ten repos ships a
+    .mailmap at its pinned head (pytest; two lines, both naming a third party, both in the
+    name-only `Proper Name <addr>` form). Its measured effect at head 36704f9b54 is zero:
+    0 of 12294 commits change their (name, email) under `--use-mailmap`, 1222 distinct
+    pairs either way — the two addresses it covers already carry that name in the raw log.
+    Across all ten rows, distinct-author counts are identical with and without mailmap:
+    0 addresses collapsed, corpus-wide. sqlite-utils and pyinfra ship no .mailmap at all
+    and set no `mailmap.file`/`mailmap.blob`, so for two of the three rows in question the
+    lever does not exist.
+    WHAT ACTUALLY BLOCKS THE THREE ROWS is a real second address the project never
+    declared: pytest 1 unclaimed address (27 commits, subject 1131 -> 1158, share 0.092 ->
+    0.094), sqlite-utils 1 (38 commits, 1042 -> 1080, 0.891 -> 0.923), pyinfra 2 (279 and
+    1930 commits, 1211 -> 3420, 0.278 -> 0.784 — and the larger of the two OUTRANKS the
+    selected address, so the corpus selects this person's second-biggest identity).
+    Claiming them clears the confound completely (residual unclaimed = 0 in all three) and
+    moves every denominator — which is exactly the trade notes.aliases already described.
+    So the only lever available is explicit alias claiming, and it remains a corpus
+    decision, not a code fix.
+    THE ONE 1g CANDIDATE THIS RAISES, stated so it is not overread: git's mailmap has two
+    forms, and only `Name <canonical> <alias>` rewrites an address. That form is already
+    honoured. The name-only form is still the repo's own sanctioned assertion that two
+    addresses belong to one human, but the pipeline can only reach it through the
+    same-display-name heuristic, which by design WARNs instead of merging — so a repo that
+    declares its aliases that way is reported as unresolved rather than resolved. NOTHING
+    IN THIS CORPUS EXERCISES THAT: pytest's two entries change nothing, and no row ships an
+    address-rewriting entry. Building tier-1.5 on this evidence would be building on a case
+    the corpus has never seen. It needs a row that actually ships such a mailmap first.
+    A prevalence note worth carrying into any such decision: 1 real repo in 10 ships a
+    mailmap at all, and that one is inert.
+
   finding_solo_threshold: >
     NOT A CODE CHANGE — reported, not acted on, because phase 1f adds no features.
     `Detection.solo_authorship_share` is 0.95. Across every real public repo probed for
