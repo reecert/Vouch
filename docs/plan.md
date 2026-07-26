@@ -368,7 +368,7 @@ later phase's output existing.
 | **1a** | **L1 rebuild.** New schema, confound detection, noise filtering, identity/mailmap resolution, blame perf fix, min-n floors, byte-reproducible output. | ✅ **Done.** 83 new tests; golden files over eight fixture repos (healthy, solo, squash-merged, bot-heavy, lockfile-noisy, rebased, aliased, short-window), each deforming one axis. Goldens pin real SHAs. No LLM in the loop. |
 | **1b** | **L2 CLI.** Versioned JSONL parser, derived metrics, upload-preview + confirmation, fail-soft to git-only. | ✅ **Done.** 34 tests. Payload-closure test walks the *schema* (not a sample) and fails on any free-text field; parser degrades cleanly on missing, mutated and non-session logs. Validated against 17,236 real records. |
 | **1c** | **L3 join.** Local join, match scoring, three-valued corroboration verdict, labelled join set + precision/recall harness. | ✅ **Done.** 21 tests. Correct on all 10 labelled cases (ground truth known by construction); harness nonetheless reports `insufficient_n` at n=10. Many-to-many, no-match, wrong-project, clock-skew and both sides of the overlap floor covered. |
-| **1d** | **L4 judge.** Diff-level prompts, strict output schema with the verdict enum, SHA+path grounding validator, support check, judge cache, eval labels populated. | Eval harness runs on a *non-empty* holdout; `insufficient_evidence` is observed firing on thin inputs, not just supported in theory. |
+| **1d** | **L4 judge.** Diff-level prompts, strict output schema with the verdict enum, SHA+path grounding validator, support check, judge cache, eval labels populated. | ⚠️ **Built, not calibrated.** 33 tests. `insufficient_evidence` is observed firing on a genuinely thin history, not merely supported in theory; grounding, support check and the over-eager adversary all pass. **The holdout is still empty** — see §5 open question 12. Treat L4's calibration as unmeasured. |
 | **1e** | **L5 web app.** Next.js report, frozen share snapshot, Limitations + Risks-to-probe sections. | A public repo goes end-to-end to a shareable read-only URL. |
 
 **Explicit non-goals for phase 1**, per the brief — not built, not stubbed, not designed around:
@@ -468,7 +468,7 @@ Lower stakes, flagged now so they do not surprise later:
    - **Noise share is measured over human commits only**, so a dependency bot's lockfile churn is
      reported once (as `bot_dominated`) rather than twice.
 
-9. **One brief metric could not be built as named (1b) — flagged rather than faked.** The brief
+7. **One brief metric could not be built as named (1b) — flagged rather than faked.** The brief
     asks for *revision-before-acceptance*. Measuring it properly needs accept/reject telemetry,
     and the logs carry only `toolDenialKind` — **2 occurrences across 17,187 records**. That is
     not a denominator. Rather than dress a different measurement in the requested name, L2 ships
@@ -482,7 +482,27 @@ Lower stakes, flagged now so they do not surprise later:
     logs are not a calibration set, and it is a reminder that these rates will read low for most
     people until there is a population to compare against.
 
-10. **L3 accuracy is real but narrow (1c).** The join is correct on all ten labelled cases and
+8. **L4 is built but uncalibrated, and the old eval harness no longer fits it (blocking 1e's
+    honesty claims).** Two separate gaps, both worth stating plainly rather than letting the
+    green test suite imply otherwise:
+
+    - **`eval/labels.yaml` is still empty.** Exactly as it was in the v0 prototype (§1.3). Every
+      guard rail around the judge is tested — grounding, the support check, the over-eager
+      adversary, `insufficient_evidence` firing on a thin history — but *whether the judge's
+      verdicts agree with human judgement* is unmeasured. Nothing in this repo yet licenses a
+      claim about L4's accuracy.
+    - **`vouch/eval/` targets the v0 schema.** It scores a single `Verdict` with a float `score`
+      against strong/weak labels; L4 emits per-dimension enum verdicts with claims. The harness's
+      *disciplines* port over (train/holdout, empty-holdout refusal, `insufficient_n`, the
+      support check) but its types do not. It is currently orphaned — it still passes its own
+      tests against the old pipeline, which is why the suite is green and why that greenness is
+      misleading about coverage of the new one.
+
+    Closing this is a **data task before it is a code task**: it needs real repos with
+    hand-labelled dimension verdicts, split train/holdout. Recommended before 1e, because the
+    report's confidence language is only honest if something behind it has been calibrated.
+
+9. **L3 accuracy is real but narrow (1c).** The join is correct on all ten labelled cases and
     the harness still refuses to call that evidence. What the number honestly supports: *the
     scorer behaves correctly on histories we constructed*. What it does not support: that it
     generalises to real repos, where commit timestamps move under rebase, several people edit the
@@ -492,7 +512,7 @@ Lower stakes, flagged now so they do not surprise later:
     task, not a code change. Until then the profile should present corroboration coverage as a
     count, never as an accuracy claim.
 
-11. **L2 log parsing is verifiable, not synthesized (1b).** Confirmed 2026-07-26: this machine has
+10. **L2 log parsing is verifiable, not synthesized (1b).** Confirmed 2026-07-26: this machine has
    54 session JSONL files across 3 projects, carrying `mode`, `permission-mode`, `user`,
    `assistant`, `attachment`, `system`, `file-history-snapshot`, `file-history-delta`,
    `last-prompt` and `queue-operation` records. `mode`/`permission-mode` are what
@@ -500,5 +520,5 @@ Lower stakes, flagged now so they do not surprise later:
    invented shape — which does **not** soften risk 6 above: one local sample is not a format
    guarantee, and the versioned-parser/fail-soft design stands.
 
-8. **Naming.** `vouch` is a working name inherited from the prototype. Keeping it through phase 1
+11. **Naming.** `vouch` is a working name inherited from the prototype. Keeping it through phase 1
    unless told otherwise.
