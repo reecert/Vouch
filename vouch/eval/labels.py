@@ -1,136 +1,110 @@
-"""Label schema + train/holdout split for the eval harness.
+"""Label schema + train/holdout split.
 
-The frozen ground truth lives in ``eval/labels.yaml``, split into two disjoint pools:
+Ported from the v0 harness, which had the disciplines right even though its types no longer
+fit. What carries over unchanged:
 
-  * **train**   — the only pool the prompt may be iterated against.
-  * **holdout** — read once, for the final reported metrics. Never tuned on.
+* **The split lives in the data, not the harness.** You can see at a glance which repos are
+  burned for prompt iteration and which are held in reserve.
+* **Every label carries a required, non-blank `reason`** — a falsifiable one-liner a
+  sceptic could check against the history. A label without one is a guess, and loading
+  fails loud rather than scoring against unjustified ground truth.
 
-Keeping the split *in the data* (not in the harness) makes the discipline auditable: you
-can see at a glance which repos are burned for iteration and which are held in reserve.
-
-Every label carries a **required** ``reason`` — a one-line falsifiable justification drawn
-from the commits. A label without a reason is not a label, it is a guess, so loading fails
-loud rather than silently scoring against unjustified ground truth.
+What changed: a label is now per **dimension**, and its verdict is drawn from L4's enum
+rather than a strong/weak binary. `insufficient_evidence` is a legitimate ground-truth
+label — "a careful human would decline to conclude here" is exactly the judgement we most
+need the model to reproduce.
 """
 from __future__ import annotations
 
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
-VALID_LABELS = ("strong", "weak")
+from vouch.l4.schema import DimensionKey, Verdict
+
+__all__ = [
+    "LabelValidationError",
+    "DimensionLabel",
+    "LabelSet",
+    "load_labels",
+]
 
 
 class LabelValidationError(Exception):
-    """A label file is malformed: bad/missing label, or a missing/blank reason."""
+    """A label file is malformed, or the holdout has leaked into train."""
 
 
-class LabeledRepo(BaseModel):
-    """One frozen label: a repo+author known to be strong/weak on ownership.
+class DimensionLabel(BaseModel):
+    """One frozen judgement: what a careful human says about this dimension, and why."""
 
-    ``reason`` is required and must be non-blank — the falsifiable one-liner that says
-    *why* this is the ground-truth verdict, in terms a skeptic could check against the
-    commit history.
-    """
+    model_config = ConfigDict(extra="forbid")
 
     repo: str
     author: str
-    label: str  # "strong" | "weak"
-    reason: str  # REQUIRED, non-blank — the falsifiable justification
-
-    @field_validator("label")
-    @classmethod
-    def _label_valid(cls, v: str) -> str:
-        if v not in VALID_LABELS:
-            raise ValueError(f"label must be one of {VALID_LABELS}, got {v!r}")
-        return v
+    dimension: DimensionKey
+    verdict: Verdict
+    reason: str  # REQUIRED, non-blank
+    aliases: list[str] = Field(default_factory=list)
 
     @field_validator("reason")
     @classmethod
     def _reason_present(cls, v: str) -> str:
         if not v or not v.strip():
-            raise ValueError("reason is required and must be a non-blank one-line justification")
+            raise ValueError(
+                "reason is required and must be a non-blank, falsifiable one-liner"
+            )
         return v.strip()
 
     @property
-    def label_is_strong(self) -> bool:
-        return self.label == "strong"
+    def key(self) -> tuple[str, str, DimensionKey]:
+        return (self.repo, self.author, self.dimension)
 
 
 class LabelSet(BaseModel):
-    """The full labeled corpus, split into train and holdout pools."""
+    """The two disjoint pools."""
 
-    train: list[LabeledRepo] = []
-    holdout: list[LabeledRepo] = []
+    model_config = ConfigDict(extra="forbid")
+
+    train: list[DimensionLabel] = Field(default_factory=list)
+    holdout: list[DimensionLabel] = Field(default_factory=list)
+
+    def all_rows(self) -> list[DimensionLabel]:
+        return [*self.train, *self.holdout]
 
     @property
     def total(self) -> int:
         return len(self.train) + len(self.holdout)
 
-    def all_rows(self) -> list[LabeledRepo]:
-        return [*self.train, *self.holdout]
-
-
-def _coerce_rows(raw: object, pool: str) -> list[LabeledRepo]:
-    if raw is None:
-        return []
-    if not isinstance(raw, list):
-        raise LabelValidationError(f"'{pool}' must be a list of label entries, got {type(raw).__name__}")
-    rows: list[LabeledRepo] = []
-    for i, entry in enumerate(raw):
-        if not isinstance(entry, dict):
-            raise LabelValidationError(f"{pool}[{i}] must be a mapping, got {type(entry).__name__}")
-        try:
-            rows.append(LabeledRepo.model_validate(entry))
-        except Exception as e:
-            # Surface which row failed and why (missing reason, bad label, ...).
-            raise LabelValidationError(f"{pool}[{i}] invalid: {e}") from e
-    return rows
-
 
 def load_labels(path: Path) -> LabelSet:
-    """Parse and validate ``eval/labels.yaml`` into a :class:`LabelSet`.
+    """Load and validate a label file. Raises rather than silently accepting a bad one."""
+    if not path.is_file():
+        raise FileNotFoundError(f"no label file at {path}")
 
-    Fails loud (``LabelValidationError``) on: a missing/blank ``reason``, an invalid
-    ``label`` value, a duplicated ``(repo, author)`` across the whole corpus, or a
-    ``(repo, author)`` appearing in *both* train and holdout (which would leak the holdout
-    into iteration). A row's own field errors (e.g. missing reason) are raised too.
-    """
-    doc = yaml.safe_load(Path(path).read_text()) or {}
-    if not isinstance(doc, dict):
-        raise LabelValidationError("labels file must be a mapping with 'train' / 'holdout' keys")
+    try:
+        raw = yaml.safe_load(path.read_text()) or {}
+    except yaml.YAMLError as e:
+        raise LabelValidationError(f"{path}: not valid YAML: {e}") from e
 
-    # Reject the legacy flat `labels:` shape explicitly rather than silently ignoring it.
-    if "labels" in doc and "train" not in doc and "holdout" not in doc:
+    if not isinstance(raw, dict) or not {"train", "holdout"} <= set(raw):
         raise LabelValidationError(
-            "labels file uses the old flat 'labels:' shape; split it into 'train:' and 'holdout:'"
+            f"{path}: expected top-level 'train:' and 'holdout:' pools"
         )
 
-    train = _coerce_rows(doc.get("train"), "train")
-    holdout = _coerce_rows(doc.get("holdout"), "holdout")
+    try:
+        labels = LabelSet.model_validate(
+            {"train": raw.get("train") or [], "holdout": raw.get("holdout") or []}
+        )
+    except Exception as e:
+        raise LabelValidationError(f"{path}: {e}") from e
 
-    _check_no_overlap(train, holdout)
-    return LabelSet(train=train, holdout=holdout)
-
-
-def _check_no_overlap(train: list[LabeledRepo], holdout: list[LabeledRepo]) -> None:
-    def key(r: LabeledRepo) -> tuple[str, str]:
-        return (r.repo, r.author)
-
-    train_keys = {key(r) for r in train}
-    holdout_keys = {key(r) for r in holdout}
-
-    leaked = train_keys & holdout_keys
+    # A row in both pools makes the holdout number meaningless — the prompt was tuned on it.
+    leaked = {row.key for row in labels.train} & {row.key for row in labels.holdout}
     if leaked:
         raise LabelValidationError(
-            f"{sorted(leaked)} appear in BOTH train and holdout — that leaks the holdout"
+            f"{path}: {len(leaked)} label(s) appear in BOTH train and holdout: "
+            f"{sorted(str(k) for k in leaked)}. The holdout must never be tuned on."
         )
 
-    for pool_name, rows in (("train", train), ("holdout", holdout)):
-        seen: set[tuple[str, str]] = set()
-        for r in rows:
-            k = key(r)
-            if k in seen:
-                raise LabelValidationError(f"duplicate (repo, author) in {pool_name}: {k}")
-            seen.add(k)
+    return labels

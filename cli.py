@@ -1,74 +1,129 @@
 """vouch CLI — a thin typer adapter over the library. All logic lives in ``vouch/``."""
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import typer
 
-from vouch.config import CONFIG
 from vouch.eval import (
     EvalError,
     LabelValidationError,
-    MockJudgeProvider,
-    MockMode,
+    format_report,
     load_labels,
     run_eval,
 )
-from vouch.eval.format import format_report
-from vouch.extract import extract
 from vouch.ingest import ingest, resolve_repo
-from vouch.judge import JudgeError, build_provider_chain, judge
-from vouch.judge.cache import JudgeCache
+from vouch.l1.extract import extract_facts
 from vouch.l2.metrics import derive_metrics
 from vouch.l2.parser import parse_log_dir
+from vouch.l2.payload import SessionMetrics
 from vouch.l2.preview import render_payload, render_preview
-from vouch.report import build_report, to_json, to_markdown
+from vouch.l3.join import join
+from vouch.l4.judge import JudgeError, judge_profile
+from vouch.l4.prompt import PROMPT_VERSION
+from vouch.l4.providers import build_default_provider
 
-app = typer.Typer(help="vouch — evidence-backed capability reports from real commits.")
+app = typer.Typer(help="vouch — evidence-backed capability profiles from real commits.")
+
+# Module-level singletons: typer wants the option object as the default, and building it
+# inline would be a function call in an argument default.
+_ALIAS = typer.Option(
+    [], "--alias", help="Additional address this person commits under. Repeatable."
+)
 
 
 @app.command()
-def run(
+def facts(
     repo_url: str = typer.Argument(..., help="Public git repo URL (or local path)."),
     author: str = typer.Option(..., "--author", help="Author email to evaluate."),
-    markdown: bool = typer.Option(False, "--markdown", help="Also print a markdown summary."),
-    out: str | None = typer.Option(None, "--out", help="Write the JSON report to this path."),
-    evidence_only: bool = typer.Option(
-        False,
-        "--evidence-only",
-        help="Skip the LLM judge; emit just the deterministic EvidenceBundle.",
-    ),
+    alias: list[str] = _ALIAS,
+    out: str | None = typer.Option(None, "--out", help="Write the JSON to this path."),
 ) -> None:
-    """Run the pipeline: ingest -> extract -> judge -> report for one author."""
+    """Run L1 only: the deterministic facts and confounds. No LLM, no network beyond git.
+
+    This is the layer to inspect when a profile says something surprising — everything
+    downstream is built on it, and it is byte-reproducible.
+    """
     repo_path = resolve_repo(repo_url)
     snapshot = ingest(repo_url)
-    bundle = extract(snapshot, author, repo_path=repo_path, config=CONFIG)
+    result = extract_facts(snapshot, author, repo_path, aliases=list(alias))
 
-    if bundle.n_commits_by_subject == 0:
+    if result.n_commits_by_subject == 0:
         typer.echo(f"warning: no commits by {author} in {repo_url}", err=True)
 
-    if evidence_only:
-        typer.echo(bundle.model_dump_json(indent=2))
-        return
-
-    try:
-        verdict, judge_model = judge(bundle, config=CONFIG)
-    except JudgeError as e:
-        typer.echo(f"judge failed: {e}", err=True)
-        typer.echo("(re-run with --evidence-only to inspect the deterministic signals)", err=True)
-        raise typer.Exit(1) from e
-
-    report = build_report(bundle, verdict, judge_model, CONFIG.prompt_version)
-    payload = to_json(report)
-
+    payload = result.model_dump_json(indent=2)
     if out:
         Path(out).write_text(payload)
         typer.echo(f"wrote {out}", err=True)
     else:
         typer.echo(payload)
 
-    if markdown:
-        typer.echo("\n" + to_markdown(report))
+
+@app.command()
+def profile(
+    repo_url: str = typer.Argument(..., help="Public git repo URL (or local path)."),
+    author: str = typer.Option(..., "--author", help="Author email to evaluate."),
+    alias: list[str] = _ALIAS,
+    sessions_file: str | None = typer.Option(
+        None,
+        "--sessions",
+        help="Session metrics JSON from `vouch sessions`. Omit to run git-only.",
+    ),
+    log_dir: str | None = typer.Option(
+        None,
+        "--log-dir",
+        help="Correlate against session logs in this directory (local join, L3).",
+    ),
+    out: str | None = typer.Option(None, "--out", help="Write the JSON to this path."),
+) -> None:
+    """Run the full pipeline: facts -> corroboration -> diff-level judgment.
+
+    Dimensions that depend on session telemetry report ``not_assessed`` when it is absent,
+    rather than being guessed at.
+    """
+    repo_path = resolve_repo(repo_url)
+    snapshot = ingest(repo_url)
+    facts_result = extract_facts(snapshot, author, repo_path, aliases=list(alias))
+
+    metrics: SessionMetrics | None = None
+    if sessions_file:
+        metrics = SessionMetrics.model_validate_json(Path(sessions_file).read_text())
+
+    corroboration = None
+    if log_dir:
+        parsed = parse_log_dir(Path(log_dir))
+        corroboration = join(snapshot.commits, parsed.sessions, repo_path)
+
+    try:
+        result = judge_profile(
+            build_default_provider(),
+            facts_result,
+            repo_path,
+            snapshot.commits,
+            metrics=metrics,
+            corroboration=corroboration,
+        )
+    except JudgeError as e:
+        typer.echo(f"judge failed: {e}", err=True)
+        typer.echo("(run `vouch facts` to inspect the deterministic layer)", err=True)
+        raise typer.Exit(1) from e
+
+    payload = json.dumps(
+        {
+            "facts": json.loads(facts_result.model_dump_json()),
+            "corroboration": (
+                json.loads(corroboration.model_dump_json()) if corroboration else None
+            ),
+            "judgment": json.loads(result.model_dump_json()),
+        },
+        indent=2,
+    )
+    if out:
+        Path(out).write_text(payload)
+        typer.echo(f"wrote {out}", err=True)
+    else:
+        typer.echo(payload)
 
 
 @app.command("sessions")
@@ -114,28 +169,19 @@ def sessions(
 @app.command("eval")
 def eval_(
     labels_path: str = typer.Option(
-        "eval/labels.yaml", "--labels", help="Path to the frozen train/holdout label set."
+        "eval/labels.yaml", "--labels", help="Frozen train/holdout label set."
     ),
     split: str = typer.Option(
         "holdout",
         "--split",
         help="Which pool to score: 'train' (iterate), 'holdout' (report), or 'all'.",
     ),
-    mock: bool = typer.Option(
-        True,
-        "--mock/--live",
-        help="Offline mock judge (default) vs the real provider chain. Iterate on --mock; "
-        "--live burns quota and hits the network.",
-    ),
-    no_cache: bool = typer.Option(
-        False, "--no-cache", help="Disable the bundle-hash judge cache (forces fresh calls)."
-    ),
 ) -> None:
-    """Score the judge against the frozen labels — agreement + confidence separation.
+    """Score the judge's dimension verdicts against hand-labelled ground truth.
 
-    Refuses to report an empty holdout; warns loudly when the labeled corpus is too small
-    to be evidence. Iterate on ``--split train --mock``; report the final number once with
-    ``--split holdout --live``.
+    Refuses an empty holdout and warns loudly when the corpus is too small to be evidence.
+    Reports overclaims separately from underclaims: concluding where a human declined is
+    the failure this product exists to avoid, and an aggregate agreement figure hides it.
     """
     try:
         labels = load_labels(Path(labels_path))
@@ -143,20 +189,26 @@ def eval_(
         typer.echo(f"label validation failed: {e}", err=True)
         raise typer.Exit(2) from e
 
-    if mock:
-        providers = [MockJudgeProvider(MockMode.HONEST, config=CONFIG)]
-    else:
-        providers = build_provider_chain(CONFIG)
-
-    cache = JudgeCache(None) if no_cache else JudgeCache()
+    def judge_one(label):
+        repo_path = resolve_repo(label.repo)
+        snapshot = ingest(label.repo)
+        facts_result = extract_facts(
+            snapshot, label.author, repo_path, aliases=label.aliases
+        )
+        result = judge_profile(
+            build_default_provider(),
+            facts_result,
+            repo_path,
+            snapshot.commits,
+        )
+        return result.finding(label.dimension)
 
     try:
-        report = run_eval(labels, providers, split=split, cache=cache, config=CONFIG)
+        report = run_eval(
+            labels, judge_one, split=split, prompt_version=PROMPT_VERSION
+        )
     except EvalError as e:
         typer.echo(f"eval refused: {e}", err=True)
-        raise typer.Exit(1) from e
-    except JudgeError as e:
-        typer.echo(f"judge failed: {e}", err=True)
         raise typer.Exit(1) from e
 
     typer.echo(format_report(report))

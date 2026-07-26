@@ -1,7 +1,7 @@
 [project]
 name = "vouch"
 version = "0.0.1"
-description = "Evidence-backed capability reports for engineers, grounded in real commits. v0: ownership only."
+description = "Evidence-backed engineer capability profiles, grounded in real commits and local session telemetry."
 requires-python = ">=3.12"
 dependencies = [
     "pydantic>=2.6",
@@ -12,10 +12,11 @@ dependencies = [
 [project.optional-dependencies]
 # Provider SDKs are lazy-imported behind JudgeProvider — install only what you use.
 # The deterministic core (ingest/extract) and the test suite need none of these.
+# The judge. Free-tier providers are deliberately absent: sending real diffs and derived
+# behavioural metrics about a named individual to a train-on-input tier is not defensible
+# in a product (docs/plan.md open question 5).
 providers = [
-    "google-genai>=0.3",
-    "groq>=0.11",
-    "ollama>=0.3",
+    "anthropic>=0.40",
 ]
 dev = [
     "pytest>=8.0",
@@ -31,7 +32,15 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
 py-modules = ["cli"]
-packages = ["vouch", "vouch.ingest", "vouch.extract", "vouch.judge", "vouch.report", "vouch.eval"]
+packages = [
+    "vouch",
+    "vouch.ingest",
+    "vouch.l1",
+    "vouch.l2",
+    "vouch.l3",
+    "vouch.l4",
+    "vouch.eval",
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

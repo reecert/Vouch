@@ -1,80 +1,128 @@
-"""CLI wiring tests via typer's CliRunner. The judge is monkeypatched so no LLM/network
-is touched; --evidence-only exercises the fully-deterministic path with no patching."""
+"""CLI smoke tests — the thin adapter over the library, exercised offline.
+
+No LLM, no network, no API key. The `profile` command's judge path is covered by
+tests/test_l4_judge.py against mock providers; here we check the wiring and the failure
+messages a user actually sees.
+"""
+from __future__ import annotations
+
 import json
-from datetime import date
 from pathlib import Path
 
 from typer.testing import CliRunner
 
-import cli as cli_module
-from tests.fixtures.builder import ALICE, Step, build_repo
-from vouch.schemas import Verdict
+from cli import app
+from tests.fixtures import logs, repos
 
 runner = CliRunner()
+SUBJECT = "alice@example.com"
 
 
-def _fixture_repo(tmp_path: Path) -> Path:
-    repo = tmp_path / "r"
-    build_repo(
-        repo,
-        [
-            Step(ALICE, "2024-01-01T10:00:00", "add calc", {"calc.py": "def f():\n    return 1\n"}),
-            Step(ALICE, "2024-02-10T10:00:00", "fix calc bug", {"calc.py": "def f():\n    return 2\n"}),
-        ],
-    )
-    return repo
+def test_facts_runs_without_any_provider(tmp_path: Path) -> None:
+    """L1 is inspectable on its own — no API key, no network beyond git."""
+    repo = tmp_path / "repo"
+    repos.healthy(repo)
 
+    result = runner.invoke(app, ["facts", str(repo), "--author", SUBJECT])
 
-def test_evidence_only_runs_without_provider(tmp_path: Path, monkeypatch):
-    repo = _fixture_repo(tmp_path)
-    monkeypatch.chdir(tmp_path)  # cache lands in tmp
-    result = runner.invoke(
-        cli_module.app,
-        ["run", str(repo), "--author", "alice@example.com", "--evidence-only"],
-    )
     assert result.exit_code == 0, result.output
     payload = json.loads(result.stdout)
-    assert payload["subject"] == "alice@example.com"
-    assert {s["key"] for s in payload["signals"]} == {
-        "returned_to_own_code", "fixed_own_bug", "tests_accompany_fixes",
-        "revert_recovery", "commit_atomicity",
+    assert payload["n_commits_by_subject"] == 12
+    assert {f["key"] for f in payload["facts"]} == {
+        "ownership_loop",
+        "revert_rate",
+        "test_accompanies_fix",
+        "followup_latency",
+        "commit_scoping",
     }
 
 
-def test_full_run_with_monkeypatched_judge(tmp_path: Path, monkeypatch):
-    repo = _fixture_repo(tmp_path)
-    monkeypatch.chdir(tmp_path)
+def test_facts_warns_when_the_author_is_absent(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repos.healthy(repo)
 
-    def fake_judge(bundle, config=None):
-        sha = next(iter(bundle.commit_index))  # cite a real, grounded sha
-        v = Verdict(dimension="ownership", score=0.75, confidence=0.5,
-                    freshness=date(2024, 2, 10), rationale=f"self-fix {sha[:8]}",
-                    cited_evidence=[sha])
-        return v, "stub:test-model"
+    result = runner.invoke(app, ["facts", str(repo), "--author", "nobody@example.com"])
 
-    monkeypatch.setattr(cli_module, "judge", fake_judge)
-    out_path = tmp_path / "report.json"
-    result = runner.invoke(
-        cli_module.app,
-        ["run", str(repo), "--author", "alice@example.com", "--out", str(out_path), "--markdown"],
+    assert result.exit_code == 0
+    assert "no commits by" in result.output
+
+
+def test_facts_accepts_aliases(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repos.aliased(repo)
+
+    without = runner.invoke(app, ["facts", str(repo), "--author", SUBJECT])
+    with_alias = runner.invoke(
+        app, ["facts", str(repo), "--author", SUBJECT, "--alias", "alice@personal.dev"]
     )
-    assert result.exit_code == 0, result.output
-    report = json.loads(out_path.read_text())
-    assert report["judge_model"] == "stub:test-model"
-    assert report["prompt_version"] == "ownership-v0"
-    assert report["verdict"]["score"] == 0.75
-    assert "# Ownership report" in result.stdout  # markdown printed
+
+    assert json.loads(with_alias.stdout)["n_commits_by_subject"] == (
+        json.loads(without.stdout)["n_commits_by_subject"] + 1
+    )
 
 
-def test_judge_failure_exits_nonzero(tmp_path: Path, monkeypatch):
-    repo = _fixture_repo(tmp_path)
-    monkeypatch.chdir(tmp_path)
-    from vouch.judge import JudgeError
+def test_sessions_dry_run_shows_the_payload_and_exits(tmp_path: Path) -> None:
+    log_dir = tmp_path / "logs"
+    logs.write_session(log_dir / "s.jsonl", logs.healthy_session())
 
-    def boom(bundle, config=None):
-        raise JudgeError("no judge provider available")
+    result = runner.invoke(app, ["sessions", "--log-dir", str(log_dir), "--dry-run"])
 
-    monkeypatch.setattr(cli_module, "judge", boom)
-    result = runner.invoke(cli_module.app, ["run", str(repo), "--author", "alice@example.com"])
+    assert result.exit_code == 0
+    assert "This is exactly what will be uploaded" in result.output
+    assert "Read locally and NOT uploaded" in result.output
+
+
+def test_sessions_abort_uploads_nothing(tmp_path: Path) -> None:
+    log_dir = tmp_path / "logs"
+    logs.write_session(log_dir / "s.jsonl", logs.healthy_session())
+    out = tmp_path / "payload.json"
+
+    result = runner.invoke(
+        app, ["sessions", "--log-dir", str(log_dir), "--out", str(out)], input="n\n"
+    )
+
+    assert result.exit_code == 1
+    assert "aborted" in result.output
+    assert not out.exists()
+
+
+def test_sessions_degrades_without_logs(tmp_path: Path) -> None:
+    result = runner.invoke(
+        app, ["sessions", "--log-dir", str(tmp_path / "nothing"), "--dry-run"]
+    )
+
+    assert result.exit_code == 0
+    assert "DEGRADED" in result.output
+
+
+def test_eval_refuses_the_empty_shipped_holdout() -> None:
+    """The shipped label file is empty, and the harness says so rather than printing 0/0."""
+    result = runner.invoke(app, ["eval"])
+
+    assert result.exit_code == 1
+    assert "holdout is empty" in result.output
+
+
+def test_eval_rejects_a_malformed_label_file(tmp_path: Path) -> None:
+    bad = tmp_path / "labels.yaml"
+    bad.write_text("just: a string\n")
+
+    result = runner.invoke(app, ["eval", "--labels", str(bad)])
+
+    assert result.exit_code == 2
+    assert "label validation failed" in result.output
+
+
+def test_profile_fails_loud_without_a_provider(tmp_path: Path, monkeypatch) -> None:
+    """No credentials: say so, and point at the layer that still works."""
+    repo = tmp_path / "repo"
+    repos.healthy(repo)
+    monkeypatch.setattr(
+        "vouch.l4.providers.AnthropicProvider.is_available", lambda _self: False
+    )
+
+    result = runner.invoke(app, ["profile", str(repo), "--author", SUBJECT])
+
     assert result.exit_code == 1
     assert "judge failed" in result.output
+    assert "vouch facts" in result.output

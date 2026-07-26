@@ -1,82 +1,72 @@
-"""Human-readable rendering of an :class:`~vouch.eval.EvalReport`.
+"""Human-readable rendering of an :class:`~vouch.eval.harness.EvalReport`.
 
-Every metric is printed with its n. Warnings are printed first and loud — a directional
-number the reader mistakes for evidence is worse than no number. Calibration is shown as
-``insufficient_n``, never as a curve and never as "calibrated".
+Warnings print first and loud — a directional number mistaken for evidence is worse than no
+number. Every metric prints with its n. Overclaims are called out separately from
+underclaims, because they are the failure that matters here and an aggregate agreement
+figure hides them.
 """
 from __future__ import annotations
 
-from vouch.eval import EvalReport, Metrics
+from vouch.eval.harness import EvalMetrics, EvalReport
+
+__all__ = ["format_report"]
+
+_RULE = "─" * 72
 
 
 def _pct(x: float | None) -> str:
     return "n/a" if x is None else f"{x * 100:.1f}%"
 
 
-def _num(x: float | None) -> str:
-    return "n/a" if x is None else f"{x:.3f}"
-
-
-def _metrics_lines(m: Metrics) -> list[str]:
-    lines = [
+def _metric_lines(m: EvalMetrics) -> list[str]:
+    return [
         "METRICS (n printed alongside every number — read them):",
-        f"  labeled in split:   {m.n_labeled}",
-        f"  scored (accepted):  {m.n_scored}   <- metric denominator",
-        f"  judge failures:     {m.n_judge_failed}   (malformed JSON / hallucinated SHA)",
-        f"  unsupported:        {m.n_unsupported}   (inflated, no evidence — rejected)",
-        f"  no evidence:        {m.n_no_evidence}   (no commits by subject)",
+        f"  labelled in split:  {m.n_labelled}",
+        f"  scored:             {m.n_scored}   <- the denominator for everything below",
+        f"  failed to run:      {m.n_judge_failed}",
+        f"  no finding:         {m.n_no_finding}",
         "",
-        f"  (a) agreement:      {_pct(m.agreement)}   (n={m.n_scored}: "
-        f"{m.n_correct} correct / {m.n_incorrect} incorrect)",
-        "  (b) confidence separation:",
-        f"        mean confidence when correct:    {_num(m.mean_confidence_correct)} "
-        f"(n={m.n_correct})",
-        f"        mean confidence when incorrect:  {_num(m.mean_confidence_incorrect)} "
-        f"(n={m.n_incorrect})",
-        f"        separation (correct - incorrect): {_num(m.confidence_separation)}",
+        f"  exact agreement:    {_pct(m.exact_agreement)}   "
+        f"(n={m.n_scored}: {m.n_exact} exact)",
+        f"  within one band:    {_pct(m.adjacent_agreement)}   "
+        f"(n={m.n_scored}: {m.n_adjacent} adjacent)",
+        "",
+        "  DIRECTION OF DISAGREEMENT — the number this product turns on:",
+        f"    overclaimed:      {_pct(m.overclaim_rate)}   ({m.n_overclaim} row(s)) "
+        "<- concluded where a human declined",
+        f"    underclaimed:     {_pct(m.underclaim_rate)}   ({m.n_underclaim} row(s)) "
+        "<- declined where a human concluded",
         "",
         f"  calibration:        {m.calibration_status}   "
-        f"(need n>={m.calibration_threshold} scored; NOT a reliability curve, NOT 'calibrated')",
+        f"(needs n>={m.calibration_threshold} scored; not a reliability curve, "
+        "and never described as 'calibrated')",
     ]
-    return lines
 
 
 def format_report(report: EvalReport) -> str:
-    """Render an :class:`EvalReport` to a terminal-friendly string."""
-    out: list[str] = []
-    out.append("=" * 72)
-    out.append(f"vouch eval — split={report.split}  prompt={report.prompt_version}")
-    out.append(
-        f"strong-threshold={report.verdict_strong_threshold}  "
-        f"total-labeled-corpus={report.total_labeled}"
-    )
-    out.append(f"judge cache: {report.cache_hits} hit / {report.cache_misses} miss")
-    out.append("=" * 72)
+    lines = [_RULE, f"EVAL — split: {report.split}"]
+    if report.prompt_version:
+        lines.append(f"prompt: {report.prompt_version}")
+    lines.append(f"labels in corpus: {report.total_labelled}")
+    lines.append(_RULE)
 
     if report.warnings:
-        out.append("")
-        out.append("!!! WARNINGS " + "!" * 59)
-        for w in report.warnings:
-            out.append(f"  ! {w}")
-        out.append("!" * 72)
+        lines.append("WARNINGS:")
+        lines += [f"  !! {w}" for w in report.warnings]
+        lines.append(_RULE)
 
-    out.append("")
-    out.extend(_metrics_lines(report.metrics))
+    lines += _metric_lines(report.metrics)
+    lines.append(_RULE)
 
-    out.append("")
-    out.append("PER-REPO:")
-    for r in report.results:
-        mark = {"scored": "✓" if r.correct else "✗", "judge_failed": "!",
-                "unsupported": "✗", "no_evidence": "·"}.get(r.outcome, "?")
-        cache_tag = " [cached]" if r.from_cache else ""
-        head = f"  {mark} [{r.outcome}] {r.repo} <{r.author}>  label={r.label}{cache_tag}"
-        out.append(head)
-        if r.outcome == "scored":
-            out.append(
-                f"        predicted={r.predicted} score={_num(r.score)} "
-                f"confidence={_num(r.confidence)} via {r.judge_model}"
+    disagreements = [r for r in report.results if r.exact is False]
+    if disagreements:
+        lines.append("DISAGREEMENTS:")
+        for row in disagreements:
+            marker = f" [{row.direction}]" if row.direction else ""
+            lines.append(
+                f"  {row.dimension:24} expected={row.expected:22} "
+                f"got={row.predicted}{marker}"
             )
-        elif r.detail:
-            out.append(f"        {r.detail}")
-    out.append("")
-    return "\n".join(out)
+        lines.append(_RULE)
+
+    return "\n".join(lines)

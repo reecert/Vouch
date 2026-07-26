@@ -1,18 +1,25 @@
-# Frozen, hand-labeled ownership set. The crux of Phase 5.
+# Frozen, hand-labelled ground truth for the judge. THE CRUX, AND STILL EMPTY.
 #
-# Split into two disjoint pools:
-#   train    — the ONLY pool you may iterate the prompt against.
-#   holdout  — touched exactly once, for the final reported metrics. Never tune on it.
+# Two disjoint pools:
+#   train    — the ONLY pool the prompt may be iterated against.
+#   holdout  — read once, for the final reported numbers. Never tuned on.
 #
 # Each entry:
-#   repo:   public git repo URL (or local path for fixtures)
-#   author: canonical git author email under evaluation
-#   label:  strong | weak            (the ground-truth ownership verdict)
-#   reason: one-line, falsifiable justification drawn from the commits.
-#           REQUIRED. Validation fails without it. "vibes" is not a reason — point at the
-#           behavior in the history that a skeptic could check.
+#   repo:      public git repo URL (or local path)
+#   author:    canonical git author email under evaluation
+#   dimension: ownership | verification_discipline | planning_discipline | scope_control
+#   verdict:   strong | moderate | limited | insufficient_evidence
+#              | not_assessed | contradicted
+#   reason:    REQUIRED, one line, falsifiable. Point at behaviour in the history that a
+#              sceptic could check. "vibes" is not a reason and loading will fail.
+#   aliases:   optional extra addresses this person commits under
 #
-# Populate live before the calibration run. Kept empty here so the harness's
-# empty-holdout refusal and <15-labels warning are the tested default state.
+# `insufficient_evidence` is a first-class label: "a careful human would decline to
+# conclude here" is precisely the judgement we most need the model to reproduce, and a
+# corpus containing only conclusive labels would teach us nothing about overclaiming.
+#
+# Kept empty deliberately. The harness's empty-holdout refusal is the tested default
+# state, and until this file has real labels in it, NOTHING in this repository licenses a
+# claim about the judge's accuracy.
 train: []
 holdout: []

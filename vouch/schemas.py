@@ -1,20 +1,18 @@
-"""Core data primitives for vouch.
+"""Ingest-layer primitives — the normalized shape of a git history.
 
-The whole product reduces to one object: **claim + evidence + confidence + freshness**.
-Everything here is a plain Pydantic model — no logic, no I/O. These types define the
-contracts between the pipeline stages:
+Plain Pydantic models: no logic, no I/O. These are the only types shared across layers, and
+they describe *what git said*, never what anyone concluded from it. Each layer owns its own
+output contract:
 
-    ingest  -> RepoSnapshot
-    extract -> EvidenceBundle (Signals + CommitMeta index)
-    judge   -> Verdict
-    report  -> CapabilityReport
-
-Hard rule encoded structurally: the judge only ever sees an ``EvidenceBundle`` — signals
-plus SHA-anchored ``CommitMeta``. It never sees a raw diff, and never the repo.
+    ingest -> RepoSnapshot        (this module)
+    L1     -> RepoFacts           (vouch.l1.facts)
+    L2     -> SessionMetrics      (vouch.l2.payload)
+    L3     -> CorroborationReport (vouch.l3.join)
+    L4     -> JudgeResult         (vouch.l4.schema)
 """
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import datetime
 
 from pydantic import BaseModel, Field
 
@@ -65,88 +63,3 @@ class RepoSnapshot(BaseModel):
     # hundreds of commits and zero merges was squash-merged or rebase-merged.
     n_merge_commits: int = 0
     is_shallow: bool = False
-
-
-# --------------------------------------------------------------------------------------
-# extract output
-# --------------------------------------------------------------------------------------
-
-
-class Signal(BaseModel):
-    """A single computed ownership signal, carrying the SHAs that back it.
-
-    ``evidence`` is the receipts: every SHA here must also appear in the enclosing
-    bundle's ``commit_index``, so the judge can cite it and the grounding validator can
-    verify it.
-    """
-
-    key: str  # e.g. "fixed_own_bug"
-    value: float | int | bool
-    evidence: list[str] = Field(default_factory=list)  # commit SHAs / PR refs
-    computed_at: datetime
-
-
-class CommitMeta(BaseModel):
-    """Human-readable anchor for one SHA the judge may cite. **No diff, ever.**"""
-
-    sha: str
-    short: str
-    authored_at: datetime
-    subject: str
-    n_files: int
-    touched_tests: bool
-
-
-class EvidenceBundle(BaseModel):
-    """The exact payload handed to the judge. The deterministic/LLM contract.
-
-    The judge reasons ONLY over this. ``commit_index`` holds a ``CommitMeta`` for every
-    SHA referenced by any signal — the anchors the rationale may cite — and nothing else.
-    """
-
-    repo: str
-    subject: str  # canonical author email under evaluation
-    dimension: str = "ownership"
-    window_first: date | None = None
-    window_last: date | None = None
-    n_commits_by_subject: int = 0
-    signals: list[Signal] = Field(default_factory=list)
-    commit_index: dict[str, CommitMeta] = Field(default_factory=dict)
-
-    def known_shas(self) -> set[str]:
-        """Every SHA the judge is allowed to cite (grounding validator uses this)."""
-        return set(self.commit_index.keys())
-
-
-# --------------------------------------------------------------------------------------
-# judge output
-# --------------------------------------------------------------------------------------
-
-
-class Verdict(BaseModel):
-    """The model's judgment. Must cite only SHAs present in the input bundle."""
-
-    dimension: str  # "ownership"
-    score: float = Field(ge=0.0, le=1.0)
-    confidence: float = Field(ge=0.0, le=1.0)  # calibrated, not vibes
-    freshness: date  # most recent supporting evidence
-    rationale: str  # must reference cited SHAs
-    cited_evidence: list[str] = Field(default_factory=list)  # SHAs actually used
-
-
-# --------------------------------------------------------------------------------------
-# report output
-# --------------------------------------------------------------------------------------
-
-
-class CapabilityReport(BaseModel):
-    """Final artifact: verdict + the evidence that produced it + full provenance."""
-
-    repo: str
-    subject: str
-    dimension: str
-    verdict: Verdict
-    evidence: list[Signal] = Field(default_factory=list)
-    judge_model: str  # which provider/model produced the judgment
-    prompt_version: str
-    generated_at: datetime
