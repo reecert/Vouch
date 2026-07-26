@@ -367,7 +367,7 @@ later phase's output existing.
 | **0** | This document + baseline. | ✅ **Done.** |
 | **1a** | **L1 rebuild.** New schema, confound detection, noise filtering, identity/mailmap resolution, blame perf fix, min-n floors, byte-reproducible output. | ✅ **Done.** 83 new tests; golden files over eight fixture repos (healthy, solo, squash-merged, bot-heavy, lockfile-noisy, rebased, aliased, short-window), each deforming one axis. Goldens pin real SHAs. No LLM in the loop. |
 | **1b** | **L2 CLI.** Versioned JSONL parser, derived metrics, upload-preview + confirmation, fail-soft to git-only. | ✅ **Done.** 34 tests. Payload-closure test walks the *schema* (not a sample) and fails on any free-text field; parser degrades cleanly on missing, mutated and non-session logs. Validated against 17,236 real records. |
-| **1c** | **L3 join.** Local join, match scoring, three-valued corroboration verdict, labelled join set + precision/recall harness. | Accuracy reported with its n, under the existing honest-at-small-n rules. Many-to-many and no-match cases covered by fixtures. |
+| **1c** | **L3 join.** Local join, match scoring, three-valued corroboration verdict, labelled join set + precision/recall harness. | ✅ **Done.** 21 tests. Correct on all 10 labelled cases (ground truth known by construction); harness nonetheless reports `insufficient_n` at n=10. Many-to-many, no-match, wrong-project, clock-skew and both sides of the overlap floor covered. |
 | **1d** | **L4 judge.** Diff-level prompts, strict output schema with the verdict enum, SHA+path grounding validator, support check, judge cache, eval labels populated. | Eval harness runs on a *non-empty* holdout; `insufficient_evidence` is observed firing on thin inputs, not just supported in theory. |
 | **1e** | **L5 web app.** Next.js report, frozen share snapshot, Limitations + Risks-to-probe sections. | A public repo goes end-to-end to a shareable read-only URL. |
 
@@ -466,7 +466,17 @@ Lower stakes, flagged now so they do not surprise later:
     logs are not a calibration set, and it is a reminder that these rates will read low for most
     people until there is a population to compare against.
 
-10. **L2 log parsing is verifiable, not synthesized (1b).** Confirmed 2026-07-26: this machine has
+10. **L3 accuracy is real but narrow (1c).** The join is correct on all ten labelled cases and
+    the harness still refuses to call that evidence. What the number honestly supports: *the
+    scorer behaves correctly on histories we constructed*. What it does not support: that it
+    generalises to real repos, where commit timestamps move under rebase, several people edit the
+    same files in the same hour, and sessions are abandoned without committing. Getting past
+    `insufficient_n` needs ≥20 labelled commits from histories we did **not** build — the
+    cheapest source is this repo's own history plus its session logs, which is a real labelling
+    task, not a code change. Until then the profile should present corroboration coverage as a
+    count, never as an accuracy claim.
+
+11. **L2 log parsing is verifiable, not synthesized (1b).** Confirmed 2026-07-26: this machine has
    54 session JSONL files across 3 projects, carrying `mode`, `permission-mode`, `user`,
    `assistant`, `attachment`, `system`, `file-history-snapshot`, `file-history-delta`,
    `last-prompt` and `queue-operation` records. `mode`/`permission-mode` are what
