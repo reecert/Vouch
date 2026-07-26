@@ -11,12 +11,12 @@ test file. Pure functions, no I/O — this module is arithmetic.
 from __future__ import annotations
 
 import re
-from enum import Enum
+from enum import StrEnum
 
 __all__ = ["PathKind", "classify", "is_significant", "is_test", "is_noise"]
 
 
-class PathKind(str, Enum):
+class PathKind(StrEnum):
     """What a touched path is. ``SOURCE`` and ``TEST`` are significant; the rest is noise."""
 
     SOURCE = "source"
