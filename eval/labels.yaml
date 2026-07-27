@@ -1,22 +1,33 @@
 # Frozen, hand-labelled ground truth for the judge. THE CRUX, AND STILL EMPTY.
 #
 # Two disjoint pools:
-#   train    — the ONLY pool the prompt may be iterated against.
-#   holdout  — read once, for the final reported numbers. Never tuned on.
+#   train    - the ONLY pool the prompt may be iterated against.
+#   holdout  - read once, for the final reported numbers. Never tuned on.
 #
 # Each entry:
-#   repo:      public git repo URL (or local path)
-#   author:    canonical git author email under evaluation
+#   corpus_id: a row id from eval/repos.yaml. THE ONLY IDENTIFIER.
 #   dimension: ownership | verification_discipline | planning_discipline | scope_control
 #   verdict:   strong | moderate | limited | insufficient_evidence
-#              | not_assessed | contradicted
+#              | not_assessed | not_assessable | contradicted
 #   reason:    REQUIRED, one line, falsifiable. Point at behaviour in the history that a
 #              sceptic could check. "vibes" is not a reason and loading will fail.
-#   aliases:   optional extra addresses this person commits under
+#
+# NO ADDRESSES. NOT IN A FIELD, NOT IN A COMMENT, NOT IN A `reason`.
+# There is no `author:` field to put one in, and `load_labels` scans the raw bytes of this
+# file for anything email-shaped and refuses to load if it finds one. eval/repos.yaml
+# already stores a *selector* rather than an address so that no third-party address enters
+# this repository's history; a label file keyed on `(repo, author)` would have undone that
+# in a single line, in the file whose whole purpose is to record judgements about the
+# people it names. The address is resolved from the clone at the moment it is needed and
+# is never written down.
 #
 # `insufficient_evidence` is a first-class label: "a careful human would decline to
 # conclude here" is precisely the judgement we most need the model to reproduce, and a
 # corpus containing only conclusive labels would teach us nothing about overclaiming.
+#
+# THIS FILE NEVER LEAVES THIS MACHINE. It is not shipped in the public repo, not bundled
+# into a demo, and not uploaded. It records one person's judgements about named engineers
+# who did not ask to be judged; the corpus is a calibration instrument, not a product.
 #
 # Kept empty deliberately. The harness's empty-holdout refusal is the tested default
 # state, and until this file has real labels in it, NOTHING in this repository licenses a

@@ -13,9 +13,22 @@ What changed: a label is now per **dimension**, and its verdict is drawn from L4
 rather than a strong/weak binary. `insufficient_evidence` is a legitimate ground-truth
 label — "a careful human would decline to conclude here" is exactly the judgement we most
 need the model to reproduce.
+
+**A label is keyed on a corpus id, never on a person.** `eval/repos.yaml` already stores a
+*selector* — the n-th most prolific non-bot author at a pinned head, guarded by a digest —
+precisely so that no third-party address enters this repository. A label file keyed on
+`(repo_url, author_email)` would have undone that in one line, and would have done it in the
+file whose entire purpose is to record judgements about the people named in it. The id is
+the join key; the address is resolved from the clone at the moment it is needed, by
+:mod:`vouch.eval.corpus`, and is never written down.
+
+This is enforced, not documented: :func:`load_labels` rejects a file containing anything
+shaped like an email address, wherever it appears — including inside a `reason`, which is
+free text a human writes by hand and is exactly where one would slip in.
 """
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import yaml
@@ -30,22 +43,29 @@ __all__ = [
     "load_labels",
 ]
 
+#: Deliberately broad. A false positive here costs one rephrased `reason`; a false negative
+#: puts somebody's address in a public git history, where deleting it later is not enough.
+_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
+
 
 class LabelValidationError(Exception):
     """A label file is malformed, or the holdout has leaked into train."""
 
 
 class DimensionLabel(BaseModel):
-    """One frozen judgement: what a careful human says about this dimension, and why."""
+    """One frozen judgement: what a careful human says about this dimension, and why.
+
+    ``corpus_id`` is the only identifier. There is no `repo`, no `author` and no `aliases`
+    field, because a field that can hold an address eventually holds one — the guarantee is
+    the absent field, not the discipline of whoever fills the file in.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    repo: str
-    author: str
+    corpus_id: str  # a row id in eval/repos.yaml; resolves to a person at run time
     dimension: DimensionKey
     verdict: Verdict
     reason: str  # REQUIRED, non-blank
-    aliases: list[str] = Field(default_factory=list)
 
     @field_validator("reason")
     @classmethod
@@ -54,11 +74,27 @@ class DimensionLabel(BaseModel):
             raise ValueError(
                 "reason is required and must be a non-blank, falsifiable one-liner"
             )
+        if _EMAIL_RE.search(v):
+            raise ValueError(
+                "reason contains something shaped like an email address. Labels are keyed "
+                "on corpus_id and no address belongs in this file — refer to the subject "
+                "as 'the subject' or by corpus id."
+            )
         return v.strip()
 
+    @field_validator("corpus_id")
+    @classmethod
+    def _id_is_an_id(cls, v: str) -> str:
+        if _EMAIL_RE.search(v):
+            raise ValueError(
+                f"corpus_id {v!r} is an email address. It must be a row id from "
+                "eval/repos.yaml, which resolves to a person only against a clone."
+            )
+        return v
+
     @property
-    def key(self) -> tuple[str, str, DimensionKey]:
-        return (self.repo, self.author, self.dimension)
+    def key(self) -> tuple[str, DimensionKey]:
+        return (self.corpus_id, self.dimension)
 
 
 class LabelSet(BaseModel):
@@ -77,13 +113,31 @@ class LabelSet(BaseModel):
         return len(self.train) + len(self.holdout)
 
 
-def load_labels(path: Path) -> LabelSet:
-    """Load and validate a label file. Raises rather than silently accepting a bad one."""
+def load_labels(
+    path: Path, known_ids: set[str] | None = None
+) -> LabelSet:
+    """Load and validate a label file. Raises rather than silently accepting a bad one.
+
+    ``known_ids`` is the set of ids in ``eval/repos.yaml``; when supplied, every label must
+    name one of them.
+    """
     if not path.is_file():
         raise FileNotFoundError(f"no label file at {path}")
 
+    text = path.read_text()
+
+    # Checked against the raw bytes, before parsing. A field the schema would reject is
+    # still a leak the moment the file is committed, and comments are not parsed at all.
+    if found := sorted(set(_EMAIL_RE.findall(text))):
+        raise LabelValidationError(
+            f"{path}: contains {len(found)} email-shaped string(s) "
+            f"(first: {found[0].split('@')[0][:3]}...@...). Labels are keyed on "
+            "corpus_id — an id from eval/repos.yaml — and no third-party address may "
+            "enter this repository's history, in a field or in a comment."
+        )
+
     try:
-        raw = yaml.safe_load(path.read_text()) or {}
+        raw = yaml.safe_load(text) or {}
     except yaml.YAMLError as e:
         raise LabelValidationError(f"{path}: not valid YAML: {e}") from e
 
@@ -106,5 +160,15 @@ def load_labels(path: Path) -> LabelSet:
             f"{path}: {len(leaked)} label(s) appear in BOTH train and holdout: "
             f"{sorted(str(k) for k in leaked)}. The holdout must never be tuned on."
         )
+
+    if known_ids is not None:
+        # An id is only a join key if it joins. A typo would otherwise surface much later,
+        # as a row the harness silently could not score.
+        unknown = sorted({r.corpus_id for r in labels.all_rows()} - set(known_ids))
+        if unknown:
+            raise LabelValidationError(
+                f"{path}: {len(unknown)} label(s) name a corpus id that does not exist "
+                f"in the corpus: {unknown}."
+            )
 
     return labels

@@ -386,9 +386,9 @@ existing prototype as its own commit so the rebuild diff is readable.
 
 Resolved:
 
-1. ~~**`[MARKET]` was left as a literal placeholder in the brief.**~~ **Answered 2026-07-25:
-   hiring teams screening candidates.** Founders and engineering leaders are the reader; the
-   subject is someone they are evaluating. Consequences, folded into the plan above:
+1. ~~**`[MARKET]` was left as a literal placeholder in the brief.**~~ **Hiring teams screening
+   candidates.** Founders and engineering leaders are the reader; the subject is someone they are
+   evaluating. Consequences, folded into the plan above:
 
    - **This is the competitor's exact positioning**, so §8 of the baseline is a competitive spec, not a
      reference. The differentiators there (shown-not-asserted corroboration, confound disclosure,
@@ -409,7 +409,7 @@ Resolved:
 
 Decide before the phase that needs it:
 
-2. ~~**Dimension set (before 1d).**~~ **Answered 2026-07-26: four, each backed by facts we
+2. ~~**Dimension set (before 1d).**~~ **Four, each backed by facts we
    actually compute.** Deliberately narrower than the competitor's nine; the Limitations section
    carries that, and every dimension can point at a denominator.
 
@@ -427,20 +427,20 @@ Decide before the phase that needs it:
    CLI was not run — stated per-dimension, following the competitor's good habit of scoping
    coverage claims per section rather than in one global disclaimer.
 
-3. ~~**L3 join location (before 1c).**~~ **Confirmed 2026-07-26: local join.** The L2 payload is
+3. ~~**L3 join location (before 1c).**~~ **Local join.** The L2 payload is
    built on it — file paths and shell commands are parsed and retained in memory for L3 to join
    against locally, and are structurally unable to reach the upload. Accepted cost: improving the
    join algorithm requires users to re-run the CLI, and corroboration cannot be re-derived
    server-side from stored data.
 
-4. ~~**Judge cost model (before 1d).**~~ **Answered 2026-07-26: bounded deterministic sample.**
+4. ~~**Judge cost model (before 1d).**~~ **Bounded deterministic sample.**
    L1 selects a fixed-size commit sample by an auditable rule — every self-fix commit (the
    evidence `ownership_loop` already rests on), plus a seeded sample of the remainder. Cost per
    profile is flat regardless of history length, and the selection is reproducible from the config
    fingerprint. The sampling rule is named in the Limitations section: a reader is told the
    profile read *N of M* commits and how those N were chosen.
 
-5. ~~**Provider policy (before 1d).**~~ **Answered 2026-07-26: `claude-opus-5` primary**, with the
+5. ~~**Provider policy (before 1d).**~~ **`claude-opus-5` primary**, with the
    `JudgeProvider` protocol retained so the chain stays swappable. The free-tier chain
    (Gemini/Groq/Ollama) is demoted to local development only — per §1.2h, sending real diffs and
    derived behavioural metrics about a named individual to a train-on-input tier is not
@@ -506,6 +506,30 @@ Lower stakes, flagged now so they do not surprise later:
     iterated against train. ~20 rows would move `calibration_status` off `insufficient_n`;
     fewer would still surface an overclaim rate, which is the number worth having first.
 
+    ✅ **The instrument for that data task now exists** — `vouch label`, and the corpus it
+    reads. The properties above are enforced by the tool rather than left to the labeller:
+
+    - **Blind by construction.** `build_task` takes L1 and L3 and has no parameter an L4
+      finding could arrive through, so "just show the labeller what the model said" is not
+      reachable. Shown a verdict first, a human agrees with it far more often than they
+      otherwise would, and the eval would then measure how persuasive the judge is.
+    - **The split is a hash of `(corpus_id, dimension)`**, fixed before the evidence is
+      rendered and not re-rollable. Per pair rather than per repo, so no history lands
+      wholly on one side.
+    - **Evidence is rendered as intervals.** A `0/5` is shown as the range it is, so the
+      person writing the ground truth cannot read it as a zero either.
+    - **No address is written down.** A label is keyed on a corpus id; `eval/repos.yaml`
+      stores a selector (rank + digest) and resolves it against the clone at run time.
+      `load_labels` scans the raw file for anything email-shaped and refuses to load.
+      Populated label sets are gitignored — they are one person's judgements about named
+      engineers who did not ask to be judged.
+    - **L1 output is cached** on (repo, pinned HEAD, identity, extractor version, config
+      fingerprint), which is what makes a labelling round something a human can stop and
+      come back to rather than a forty-seven-minute sitting done once under time pressure.
+
+    So the remaining gap is narrower than it was, and unchanged in kind: **rows in the
+    file.** Nothing here licenses a claim about the judge's accuracy.
+
 9. **L3 accuracy is real but narrow (1c).** The join is correct on all ten labelled cases and
     the harness still refuses to call that evidence. What the number honestly supports: *the
     scorer behaves correctly on histories we constructed*. What it does not support: that it
@@ -516,7 +540,7 @@ Lower stakes, flagged now so they do not surprise later:
     task, not a code change. Until then the profile should present corroboration coverage as a
     count, never as an accuracy claim.
 
-10. **L2 log parsing is verifiable, not synthesized (1b).** Confirmed 2026-07-26: this machine has
+10. **L2 log parsing is verifiable, not synthesized (1b).** This machine has
    54 session JSONL files across 3 projects, carrying `mode`, `permission-mode`, `user`,
    `assistant`, `attachment`, `system`, `file-history-snapshot`, `file-history-delta`,
    `last-prompt` and `queue-operation` records. `mode`/`permission-mode` are what
@@ -524,4 +548,4 @@ Lower stakes, flagged now so they do not surprise later:
    invented shape — which does **not** soften risk 6 above: one local sample is not a format
    guarantee, and the versioned-parser/fail-soft design stands.
 
-11. ~~**Naming.**~~ **Settled 2026-07-26:** the repository was renamed `Aiapp` -> `vouch`.
+11. ~~**Naming.**~~ The repository was renamed `Aiapp` -> `vouch`.

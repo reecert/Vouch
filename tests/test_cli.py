@@ -113,6 +113,164 @@ def test_eval_rejects_a_malformed_label_file(tmp_path: Path) -> None:
     assert "label validation failed" in result.output
 
 
+# --- the labelling loop ---------------------------------------------------------------
+#
+# `vouch label` is the only interactive command in the tool, and the one whose output is
+# ground truth for everything else. The harness functions are covered in
+# tests/test_labeling.py; what is checked here is the loop around them — that an answer
+# lands in the pool its split assigned, and that the ways a labelling round goes wrong
+# (quit, a typo, an address in a reason) cost nothing.
+
+
+def _corpus(path: Path, repo: Path) -> Path:
+    """A one-row corpus over a local fixture repo, addressing alice the way the real one does.
+
+    `rank: 1` plus her digest — a selector, never an address, exactly as `eval/repos.yaml`
+    stores it.
+    """
+    from vouch.eval.corpus import email_digest
+
+    path.write_text(
+        "schema_version: eval-corpus/1\n"
+        "repos:\n"
+        "  - id: fixture\n"
+        "    axis: rich\n"
+        f"    repo: {repo}\n"
+        "    head: HEAD\n"
+        "    author:\n"
+        "      by: commit_rank\n"
+        "      rank: 1\n"
+        f"      email_sha256: {email_digest(SUBJECT)}\n"
+    )
+    return path
+
+
+def test_label_writes_one_answer_into_the_pool_its_split_assigned(tmp_path: Path) -> None:
+    import yaml
+
+    from vouch.eval.labeling import assign_split
+    from vouch.l4.dimensions import DIMENSIONS
+
+    repo = tmp_path / "repo"
+    repos.healthy(repo)
+    labels = tmp_path / "labels.local.yaml"
+
+    result = runner.invoke(
+        app,
+        [
+            "label",
+            "--corpus", str(_corpus(tmp_path / "corpus.yaml", repo)),
+            "--labels", str(labels),
+            "--limit", "1",
+        ],
+        input="moderate\nfive of twelve commits pair a fix with a test in the same commit\n",
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "1 label(s) written" in result.output
+
+    written = yaml.safe_load(labels.read_text())
+    expected = assign_split("fixture", DIMENSIONS[0].key)
+    assert len(written[expected]) == 1
+    assert written["train" if expected == "holdout" else "holdout"] == []
+    assert written[expected][0]["corpus_id"] == "fixture"
+    # The split came off the hash, not off the answer that was given.
+    assert written[expected][0]["verdict"] == "moderate"
+
+
+def test_label_quits_without_writing(tmp_path: Path) -> None:
+    repo = tmp_path / "repo"
+    repos.healthy(repo)
+    labels = tmp_path / "labels.local.yaml"
+
+    result = runner.invoke(
+        app,
+        [
+            "label",
+            "--corpus", str(_corpus(tmp_path / "corpus.yaml", repo)),
+            "--labels", str(labels),
+        ],
+        input="quit\n",
+    )
+
+    assert result.exit_code == 0
+    assert "0 label(s) written" in result.output
+    assert not labels.exists()
+
+
+def test_label_refuses_an_answer_outside_the_verdict_vocabulary(tmp_path: Path) -> None:
+    """A free-text verdict is the one thing the eval cannot score. It is not written."""
+    repo = tmp_path / "repo"
+    repos.healthy(repo)
+    labels = tmp_path / "labels.local.yaml"
+
+    result = runner.invoke(
+        app,
+        [
+            "label",
+            "--corpus", str(_corpus(tmp_path / "corpus.yaml", repo)),
+            "--labels", str(labels),
+            "--limit", "1",
+        ],
+        input="pretty good\nquit\n",
+    )
+
+    assert result.exit_code == 0
+    assert "not a verdict" in result.output
+    assert not labels.exists()
+
+
+def test_label_catches_an_address_in_a_reason_before_it_is_written(tmp_path: Path) -> None:
+    """The labeller retypes one line; the file is never left invalid mid-round."""
+    repo = tmp_path / "repo"
+    repos.healthy(repo)
+    labels = tmp_path / "labels.local.yaml"
+
+    result = runner.invoke(
+        app,
+        [
+            "label",
+            "--corpus", str(_corpus(tmp_path / "corpus.yaml", repo)),
+            "--labels", str(labels),
+            "--limit", "1",
+        ],
+        input="strong\nalice@example.com fixes her own defects\nquit\n",
+    )
+
+    assert result.exit_code == 0
+    assert "not written" in result.output
+    assert "email address" in result.output
+    assert not labels.exists()
+
+
+def test_label_skips_a_row_that_is_already_labelled(tmp_path: Path) -> None:
+    from vouch.eval.labeling import assign_split
+    from vouch.l4.dimensions import DIMENSIONS
+
+    repo = tmp_path / "repo"
+    repos.healthy(repo)
+    corpus = _corpus(tmp_path / "corpus.yaml", repo)
+    labels = tmp_path / "labels.local.yaml"
+
+    def header(spec):
+        return f"fixture  —  {spec.title}   [{assign_split('fixture', spec.key)}]"
+
+    args = ["label", "--corpus", str(corpus), "--labels", str(labels), "--limit", "1"]
+    first = runner.invoke(
+        app, args, input="moderate\ntwelve commits, five with a test alongside\n"
+    )
+    assert header(DIMENSIONS[0]) in first.output, first.output
+
+    # Second run: the first dimension is done, so the next pending one is offered instead.
+    result = runner.invoke(
+        app, args, input="insufficient_evidence\nnothing in the trail speaks to this\n"
+    )
+
+    assert result.exit_code == 0, result.output
+    assert header(DIMENSIONS[0]) not in result.output
+    assert header(DIMENSIONS[1]) in result.output
+
+
 def test_profile_fails_loud_without_a_provider(tmp_path: Path, monkeypatch) -> None:
     """No credentials: say so, and point at the layer that still works."""
     repo = tmp_path / "repo"

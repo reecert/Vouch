@@ -6,6 +6,8 @@ because overclaiming and underclaiming are not the same failure.
 """
 from __future__ import annotations
 
+import re
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -26,10 +28,11 @@ from vouch.l4.schema import Confidence, DimensionFinding, DimensionKey, Verdict
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
 
-def label(verdict: Verdict, dimension=DimensionKey.OWNERSHIP, repo="r") -> DimensionLabel:
+def label(
+    verdict: Verdict, dimension=DimensionKey.OWNERSHIP, corpus_id="hunter"
+) -> DimensionLabel:
     return DimensionLabel(
-        repo=repo,
-        author="a@b.com",
+        corpus_id=corpus_id,
         dimension=dimension,
         verdict=verdict,
         reason="returns to their own defects with tests, see the commit trail",
@@ -50,8 +53,7 @@ class TestLabelValidation:
         """A label without a justification is a guess, not ground truth."""
         with pytest.raises(ValidationError):
             DimensionLabel(
-                repo="r",
-                author="a@b.com",
+                corpus_id="hunter",
                 dimension=DimensionKey.OWNERSHIP,
                 verdict=Verdict.STRONG,
                 reason="   ",
@@ -65,8 +67,7 @@ class TestLabelValidation:
     def test_holdout_leak_is_rejected(self, tmp_path: Path) -> None:
         """A row tuned on in train makes the holdout number meaningless."""
         row = {
-            "repo": "r",
-            "author": "a@b.com",
+            "corpus_id": "hunter",
             "dimension": "ownership",
             "verdict": "strong",
             "reason": "because of the commit trail",
@@ -89,9 +90,26 @@ class TestLabelValidation:
 
         This is the test that keeps us honest: it fails the day someone populates the file
         without also updating the claims made about judge accuracy.
+
+        It now serves a second purpose. Labels are one person's judgements about named
+        engineers who did not ask to be judged, so a populated set must not ship in the
+        public repository — real labelling goes in `eval/labels.local.yaml`, which is
+        gitignored. The tracked file staying empty is what keeps that true.
         """
         labels = load_labels(REPO_ROOT / "eval" / "labels.yaml")
         assert labels.total == 0
+
+    def test_a_local_label_set_cannot_be_committed_by_accident(self) -> None:
+        """The escape hatch for real labelling is ignored by git, not merely conventional."""
+        ignored = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "check-ignore", "eval/labels.local.yaml"],
+            capture_output=True,
+            text=True,
+        )
+        assert ignored.returncode == 0, (
+            "eval/labels.local.yaml is not gitignored — a populated label set would be "
+            "one `git add .` away from a public repository."
+        )
 
 
 class TestRefusals:
@@ -113,7 +131,7 @@ class TestRefusals:
 
 class TestScoring:
     def test_exact_agreement(self) -> None:
-        labels = LabelSet(holdout=[label(Verdict.STRONG), label(Verdict.MODERATE, repo="s")])
+        labels = LabelSet(holdout=[label(Verdict.STRONG), label(Verdict.MODERATE, corpus_id="svcs")])
         report = run_eval(labels, lambda row: finding(row.verdict), split="holdout")
 
         assert report.metrics.exact_agreement == 1.0
@@ -170,7 +188,7 @@ class TestScoring:
         def boom(_label):
             raise RuntimeError("clone failed")
 
-        labels = LabelSet(holdout=[label(Verdict.STRONG), label(Verdict.STRONG, repo="s")])
+        labels = LabelSet(holdout=[label(Verdict.STRONG), label(Verdict.STRONG, corpus_id="svcs")])
         report = run_eval(labels, boom, split="holdout")
 
         assert report.metrics.n_judge_failed == 2
@@ -208,3 +226,149 @@ class TestHonestyGuards:
         assert text.index("WARNINGS") < text.index("METRICS")
         assert "OVERCLAIMED" in text
         assert "never described as 'calibrated'" in text
+
+
+class TestLabelPrivacy:
+    """No third-party address may enter this repository, in any field or any comment.
+
+    `eval/repos.yaml` already stores a selector rather than an address, for exactly this
+    reason. A label file keyed on `(repo, author)` would have undone that guarantee in one
+    line — and in the file whose entire purpose is to record judgements about the people it
+    names, which is the worst possible place to keep one.
+    """
+
+    def test_a_label_has_nowhere_to_put_an_address(self) -> None:
+        """The guarantee is the absent field, not the discipline of whoever fills it in."""
+        fields = set(DimensionLabel.model_fields)
+        assert "author" not in fields
+        assert "aliases" not in fields
+        assert "repo" not in fields
+        assert "corpus_id" in fields
+
+    def test_an_address_as_a_corpus_id_is_rejected(self) -> None:
+        with pytest.raises(ValidationError, match="email address"):
+            DimensionLabel(
+                corpus_id="someone@example.com",
+                dimension=DimensionKey.OWNERSHIP,
+                verdict=Verdict.STRONG,
+                reason="fixes their own defects, see the commit trail",
+            )
+
+    def test_an_address_hidden_in_a_reason_is_rejected(self) -> None:
+        """`reason` is hand-written free text — the one place a leak would actually happen."""
+        with pytest.raises(ValidationError, match="email address"):
+            DimensionLabel(
+                corpus_id="hunter",
+                dimension=DimensionKey.OWNERSHIP,
+                verdict=Verdict.STRONG,
+                reason="someone@example.com returns to their own defects with tests",
+            )
+
+    def test_an_address_in_a_comment_is_rejected(self, tmp_path: Path) -> None:
+        """The schema never sees a comment, so the raw bytes are checked before parsing."""
+        path = tmp_path / "labels.yaml"
+        path.write_text("# subject is someone@example.com\ntrain: []\nholdout: []\n")
+
+        with pytest.raises(LabelValidationError, match="email-shaped"):
+            load_labels(path)
+
+    def test_an_unknown_corpus_id_is_rejected(self, tmp_path: Path) -> None:
+        """An id is only a join key if it joins."""
+        path = tmp_path / "labels.yaml"
+        path.write_text(
+            yaml.safe_dump(
+                {
+                    "train": [
+                        {
+                            "corpus_id": "no-such-row",
+                            "dimension": "ownership",
+                            "verdict": "strong",
+                            "reason": "returns to their own defects with tests",
+                        }
+                    ],
+                    "holdout": [],
+                }
+            )
+        )
+
+        with pytest.raises(LabelValidationError, match="does not exist"):
+            load_labels(path, known_ids={"hunter", "svcs"})
+
+    def test_the_shipped_label_file_is_clean(self) -> None:
+        """The real one, checked in CI rather than trusted."""
+        text = (REPO_ROOT / "eval" / "labels.yaml").read_text()
+        assert not re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+
+    def test_the_corpus_file_is_clean_too(self) -> None:
+        text = (REPO_ROOT / "eval" / "repos.yaml").read_text()
+        assert not re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+
+    def test_no_third_party_address_survives_in_any_committed_file(self) -> None:
+        """The file being clean going forward is not sufficient — history is forever.
+
+        A third-party address (a maintainer's, used as a `--author` example in the v0
+        README) reached this repository's history at the import commit and was later
+        deleted from the tree. Deleting it changed nothing: the old blob was still readable
+        at its SHA, and still pushed. The history was rewritten; this test is what stops it
+        coming back.
+
+        Scope is **blob contents** — every version of every file ever committed. Commit
+        *metadata* is deliberately out of scope: git cannot record a commit without an
+        author address, so the repo owner's own identity is in every commit object by
+        construction and is not a third party's to protect.
+        """
+        allowed = {
+            # Reserved example domains and our own synthetic fixture identities. Anything
+            # outside this set is presumed to belong to a real person.
+            "example.com",
+            "example.dev",
+            "example.org",
+            "personal.dev",
+            "users.noreply.github.com",
+            "x.com",
+            "y.com",
+            "b.com",
+            "corp.com",
+            "whitesourcesoftware.com",
+        }
+        objects = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "rev-list", "--objects", "--all"],
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout.split()
+        shas = sorted(
+            {o for o in objects if len(o) == 40 and all(c in "0123456789abcdef" for c in o)}
+        )
+
+        # `--batch-check` first so only blobs are paid for; some repos carry large trees.
+        kinds = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "cat-file", "--batch-check"],
+            input="\n".join(shas),
+            capture_output=True,
+            text=True,
+            check=True,
+        ).stdout
+        blobs = [
+            line.split()[0] for line in kinds.splitlines() if line.split()[1:2] == ["blob"]
+        ]
+
+        cat = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "cat-file", "--batch"],
+            input="\n".join(blobs),
+            capture_output=True,
+            text=True,
+            errors="replace",
+        ).stdout
+
+        found = {
+            m.group(0).split("@")[1].lower()
+            for m in re.finditer(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", cat)
+        }
+        leaked = sorted(d for d in found if d not in allowed)
+        assert leaked == [], (
+            f"real-looking email domain(s) in committed file content: {leaked}. A "
+            "third-party address in this repository's history is exactly what the "
+            "selector scheme in eval/repos.yaml exists to prevent, and deleting it from "
+            "the working tree does not remove it from history."
+        )

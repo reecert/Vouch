@@ -60,12 +60,16 @@ class EvalError(Exception):
 
 
 class RowResult(BaseModel):
-    """One label's outcome."""
+    """One label's outcome.
+
+    Identified by corpus id, like the label it scores. An eval report is a natural place to
+    print "we judged <person> wrong", and printing it by address would put one in a log, a
+    terminal scrollback, or a pasted snippet — the report inherits the label file's rule.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
-    repo: str
-    author: str
+    corpus_id: str
     dimension: str
     expected: str
     predicted: str | None = None
@@ -129,8 +133,7 @@ def _compare(expected: Verdict, predicted: Verdict) -> tuple[bool, bool, str | N
 
 def _score_row(label: DimensionLabel, finding: DimensionFinding | None) -> RowResult:
     base = dict(
-        repo=label.repo,
-        author=label.author,
+        corpus_id=label.corpus_id,
         dimension=label.dimension.value,
         expected=label.verdict.value,
     )
@@ -216,8 +219,7 @@ def run_eval(
         except Exception as e:  # a failed row is reported, never fatal to the run
             results.append(
                 RowResult(
-                    repo=label.repo,
-                    author=label.author,
+                    corpus_id=label.corpus_id,
                     dimension=label.dimension.value,
                     expected=label.verdict.value,
                     outcome=OUTCOME_JUDGE_FAILED,

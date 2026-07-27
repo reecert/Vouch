@@ -51,7 +51,42 @@ shas = build_repo(tmp_path / "r", [
 ])
 ```
 
-## The L1 cache
+## Labelling the corpus
+
+`eval/labels.yaml` is tracked and **empty**, and a test keeps it that way — it is the
+schema contract, and while it is empty nothing in this repository licenses a claim about
+the judge's accuracy. Real labelling writes to `eval/labels.local.yaml`, which is
+gitignored.
+
+```bash
+vouch label                      # every unlabelled (corpus row, dimension) pair
+vouch label --only wagtail-contrib --limit 4
+```
+
+Each task prints the deterministic evidence for one dimension of one corpus row, then asks
+for a verdict. Four properties are enforced by the tool rather than left to whoever is
+labelling:
+
+- **It is blind.** `build_task` takes L1 and L3 only and has no parameter an L4 finding
+  could arrive through. Shown a model's verdict first, a human agrees with it far more
+  often than they otherwise would, and the eval then measures how persuasive the judge is
+  rather than how right it is.
+- **The split is decided before the evidence is drawn** — a hash of
+  `(corpus_id, dimension)`, so it cannot be re-rolled and a holdout cannot be chosen after
+  the fact. Per pair rather than per repo, so no one history lands wholly on one side.
+- **Thin facts are rendered as intervals.** `0/5` is shown as the range it is, so the
+  person writing ground truth cannot read it as a zero either.
+- **No address is written down.** A label is keyed on a corpus id;
+  [`eval/repos.yaml`](../eval/repos.yaml) stores a *selector* (author rank plus a digest of
+  the address) and resolves it against the clone at run time. `load_labels` scans the raw
+  file for anything email-shaped — including in a hand-written `reason` — and refuses to
+  load if it finds one.
+
+`insufficient_evidence` is a first-class answer and is expected to be common. A corpus of
+only conclusive labels would teach nothing about overclaiming, which is the failure the
+whole quality bar exists to catch.
+
+### The L1 cache
 
 L1 is expensive (a `git blame` per changed line of every fix commit) and pure, so its
 output is cached under `.vouch_cache/l1/`, keyed on repo, pinned HEAD, subject identity,

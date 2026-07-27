@@ -4,6 +4,7 @@ from __future__ import annotations
 from pathlib import Path
 
 import typer
+from pydantic import ValidationError
 
 from vouch.eval import (
     EvalError,
@@ -12,6 +13,14 @@ from vouch.eval import (
     load_labels,
     run_eval,
 )
+from vouch.eval.corpus import (
+    CorpusError,
+    load_corpus,
+    resolve_aliases,
+    resolve_author,
+)
+from vouch.eval.labeling import append_label, build_task, pending_tasks, render_task
+from vouch.eval.labels import DimensionLabel, LabelSet
 from vouch.ingest import DEFAULT_CACHE_DIR, ingest, resolve_repo
 from vouch.l1.cache import cached_extract
 from vouch.l1.extract import extract_facts
@@ -31,6 +40,7 @@ from vouch.l3.repo_identity import (
 from vouch.l4.judge import JudgeError, judge_profile
 from vouch.l4.prompt import PROMPT_VERSION
 from vouch.l4.providers import build_default_provider
+from vouch.l4.schema import Verdict
 from vouch.l5.profile import build_profile
 
 app = typer.Typer(help="vouch — evidence-backed capability profiles from real commits.")
@@ -328,10 +338,132 @@ def identity_(
     )
 
 
+@app.command("label")
+def label_(
+    labels_path: str = typer.Option(
+        "eval/labels.local.yaml",
+        "--labels",
+        help="Where labels are written. Defaults to the gitignored local file.",
+    ),
+    corpus_path: str = typer.Option(
+        "eval/repos.yaml", "--corpus", help="The corpus to label."
+    ),
+    only: str | None = typer.Option(
+        None, "--only", help="Label a single corpus row by id."
+    ),
+    limit: int = typer.Option(0, "--limit", help="Stop after this many tasks. 0 = no limit."),
+) -> None:
+    """Label the corpus by hand, blind to what the judge would say.
+
+    Shows the deterministic evidence for one dimension of one corpus row and asks for a
+    verdict. The model's answer is never rendered: shown one first, a human agrees with it
+    far more often than they otherwise would, and the eval would then be measuring how
+    persuasive the judge is rather than how right it is.
+
+    Which pool a row lands in is decided before its evidence is drawn, by a hash of
+    (corpus_id, dimension), so a holdout cannot be chosen after the fact.
+
+    Writes to the gitignored `eval/labels.local.yaml` by default. Labels are one person's
+    judgements about named engineers who did not ask to be judged; they stay on this
+    machine.
+    """
+    try:
+        corpus = load_corpus(Path(corpus_path))
+    except CorpusError as e:
+        typer.echo(f"corpus: {e}", err=True)
+        raise typer.Exit(2) from e
+
+    target = Path(labels_path)
+    existing = (
+        load_labels(target, known_ids={s.id for s in corpus.repos})
+        if target.is_file()
+        else LabelSet()
+    )
+    done = {(row.corpus_id, row.dimension) for row in existing.all_rows()}
+    ids = [s.id for s in corpus.repos if only is None or s.id == only]
+    if only is not None and not ids:
+        typer.echo(f"no corpus row with id {only!r}", err=True)
+        raise typer.Exit(2)
+
+    verdicts = [v.value for v in Verdict]
+    n_done = 0
+
+    for corpus_id, spec in pending_tasks(done, ids):
+        if limit and n_done >= limit:
+            break
+        row = corpus.by_id(corpus_id)
+        repo_path = resolve_repo(row.repo)
+        snapshot = ingest(row.repo)
+        subject = resolve_author(row, repo_path).email
+        aliases = resolve_aliases(row, repo_path)
+        facts_result, was_cached = cached_extract(
+            row.repo,
+            snapshot.head_sha,
+            subject,
+            # Bound as defaults: the lambda outlives this iteration only if the cache
+            # misses, but a late-binding closure over the loop variables would silently
+            # extract the *next* row's repo on a miss.
+            lambda s=snapshot, a=subject, p=repo_path, al=aliases: extract_facts(
+                s, a, p, aliases=al
+            ),
+            aliases=aliases,
+        )
+        if not was_cached:
+            typer.echo("(computed L1 fresh; the next pass over this row is instant)", err=True)
+
+        task = build_task(spec, corpus_id, facts_result)
+        typer.echo(render_task(task))
+
+        answer = typer.prompt("verdict (or 'skip', 'quit')").strip()
+        if answer == "quit":
+            break
+        if answer == "skip":
+            continue
+        if answer not in verdicts:
+            typer.echo(f"not a verdict; expected one of {', '.join(verdicts)}", err=True)
+            continue
+
+        reason = typer.prompt("reason (one falsifiable line a sceptic could check)").strip()
+        try:
+            # The loader's own validator, run *before* the write. An address in a `reason`
+            # is the mistake a human actually makes here, and catching it after the write
+            # would cost a hand-edit of a half-written file in the middle of a round.
+            DimensionLabel(
+                corpus_id=corpus_id,
+                dimension=spec.key,
+                verdict=Verdict(answer),
+                reason=reason,
+            )
+        except ValidationError as e:
+            typer.echo(f"not written: {e.errors()[0]['msg']}", err=True)
+            continue
+
+        try:
+            append_label(
+                target, corpus_id, spec.key, Verdict(answer), reason, task.split
+            )
+        except Exception as e:
+            typer.echo(f"not written: {e}", err=True)
+            continue
+        # Re-validate through the loader, so a reason carrying an address is caught here
+        # rather than at the next eval run.
+        try:
+            load_labels(target, known_ids={s.id for s in corpus.repos})
+        except LabelValidationError as e:
+            typer.echo(f"WROTE AN INVALID LABEL — fix {target} by hand: {e}", err=True)
+            raise typer.Exit(1) from e
+        n_done += 1
+
+    typer.echo(f"{n_done} label(s) written to {target}", err=True)
+
+
 @app.command("eval")
 def eval_(
     labels_path: str = typer.Option(
         "eval/labels.yaml", "--labels", help="Frozen train/holdout label set."
+    ),
+    corpus_path: str = typer.Option(
+        "eval/repos.yaml", "--corpus", help="The corpus a label's corpus_id resolves against."
     ),
     split: str = typer.Option(
         "holdout",
@@ -346,16 +478,26 @@ def eval_(
     the failure this product exists to avoid, and an aggregate agreement figure hides it.
     """
     try:
-        labels = load_labels(Path(labels_path))
-    except (LabelValidationError, FileNotFoundError) as e:
+        corpus = load_corpus(Path(corpus_path))
+        labels = load_labels(Path(labels_path), known_ids={s.id for s in corpus.repos})
+    except (LabelValidationError, CorpusError, FileNotFoundError) as e:
         typer.echo(f"label validation failed: {e}", err=True)
         raise typer.Exit(2) from e
 
     def judge_one(label):
-        repo_path = resolve_repo(label.repo)
-        snapshot = ingest(label.repo)
-        facts_result = extract_facts(
-            snapshot, label.author, repo_path, aliases=label.aliases
+        # The label names a corpus row; the row names a *selector*; the selector resolves
+        # to an address only here, against the clone, and only in memory.
+        spec = corpus.by_id(label.corpus_id)
+        repo_path = resolve_repo(spec.repo)
+        snapshot = ingest(spec.repo)
+        subject = resolve_author(spec, repo_path).email
+        aliases = resolve_aliases(spec, repo_path)
+        facts_result, _ = cached_extract(
+            spec.repo,
+            snapshot.head_sha,
+            subject,
+            lambda: extract_facts(snapshot, subject, repo_path, aliases=aliases),
+            aliases=aliases,
         )
         result = judge_profile(
             build_default_provider(),
