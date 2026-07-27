@@ -39,6 +39,7 @@ from vouch.l4.schema import DimensionKey, Verdict
 __all__ = [
     "LabelValidationError",
     "DimensionLabel",
+    "LabelProvenance",
     "LabelSet",
     "load_labels",
 ]
@@ -97,11 +98,46 @@ class DimensionLabel(BaseModel):
         return (self.corpus_id, self.dimension)
 
 
+class LabelProvenance(BaseModel):
+    """The code the labels were made against.
+
+    A calibration result that cannot name the code it measured is not a result. ``code_sha``
+    is the record a reader can go and check out.
+
+    ``extractor_version`` and ``l1_config`` matter for a different and sharper reason: they
+    decide whether labels still *apply*. A label is a human's judgement of the evidence they
+    were shown, and those two are what determine the numbers on the screen. Bump either one
+    and the same corpus row renders differently — so the existing labels were made against
+    a rendering that no longer exists, and carrying them forward silently would score the
+    judge against ground truth for a different question.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    code_sha: str = ""
+    dirty: bool = False  # labelled against uncommitted changes; the sha does not describe it
+    extractor_version: str = ""
+    l1_config: str = ""
+    # Deliberately no `prompt_version`. A label is a human's reading of L1 evidence and does
+    # not depend on how the judge is prompted; recording it here would imply otherwise. The
+    # eval run records it, which is where it belongs.
+
+    def differs_from(self, other: LabelProvenance) -> list[str]:
+        """Which fields would change what a labeller was shown. Empty means compatible."""
+        return [
+            name
+            for name in ("extractor_version", "l1_config")
+            if getattr(self, name) and getattr(other, name)
+            and getattr(self, name) != getattr(other, name)
+        ]
+
+
 class LabelSet(BaseModel):
     """The two disjoint pools."""
 
     model_config = ConfigDict(extra="forbid")
 
+    metadata: LabelProvenance = Field(default_factory=LabelProvenance)
     train: list[DimensionLabel] = Field(default_factory=list)
     holdout: list[DimensionLabel] = Field(default_factory=list)
 
@@ -148,7 +184,11 @@ def load_labels(
 
     try:
         labels = LabelSet.model_validate(
-            {"train": raw.get("train") or [], "holdout": raw.get("holdout") or []}
+            {
+                "metadata": raw.get("metadata") or {},
+                "train": raw.get("train") or [],
+                "holdout": raw.get("holdout") or [],
+            }
         )
     except Exception as e:
         raise LabelValidationError(f"{path}: {e}") from e
@@ -170,5 +210,16 @@ def load_labels(
                 f"{path}: {len(unknown)} label(s) name a corpus id that does not exist "
                 f"in the corpus: {unknown}."
             )
+
+    # An empty file needs no provenance — there is no result to attribute yet. The moment
+    # there is one, it must name the code it was made against, or the agreement number it
+    # eventually produces describes nothing in particular.
+    if labels.total and not labels.metadata.code_sha:
+        raise LabelValidationError(
+            f"{path}: {labels.total} label(s) with no `metadata.code_sha`. A calibration "
+            "result that cannot name the code it measured is not a result. `vouch label` "
+            "stamps this on the first write; add it by hand if the file was written "
+            "another way."
+        )
 
     return labels

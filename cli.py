@@ -19,7 +19,13 @@ from vouch.eval.corpus import (
     resolve_aliases,
     resolve_author,
 )
-from vouch.eval.labeling import append_label, build_task, pending_tasks, render_task
+from vouch.eval.labeling import (
+    append_label,
+    build_task,
+    current_provenance,
+    pending_tasks,
+    render_task,
+)
 from vouch.eval.labels import DimensionLabel, LabelSet
 from vouch.ingest import DEFAULT_CACHE_DIR, ingest, resolve_repo
 from vouch.l1.cache import cached_extract
@@ -386,6 +392,13 @@ def label_(
         raise typer.Exit(2)
 
     verdicts = [v.value for v in Verdict]
+    provenance = current_provenance()
+    if provenance.dirty:
+        typer.echo(
+            f"note: labelling against a dirty tree at {provenance.code_sha[:12]} — the "
+            "recorded sha will not describe what you were shown",
+            err=True,
+        )
     n_done = 0
 
     for corpus_id, spec in pending_tasks(done, ids):
@@ -440,7 +453,13 @@ def label_(
 
         try:
             append_label(
-                target, corpus_id, spec.key, Verdict(answer), reason, task.split
+                target,
+                corpus_id,
+                spec.key,
+                Verdict(answer),
+                reason,
+                task.split,
+                provenance=provenance,
             )
         except Exception as e:
             typer.echo(f"not written: {e}", err=True)

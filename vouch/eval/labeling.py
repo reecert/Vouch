@@ -25,10 +25,15 @@ quality bar exists to catch.
 from __future__ import annotations
 
 import hashlib
+import subprocess
 from dataclasses import dataclass, field
+from pathlib import Path
 
 import yaml
 
+from vouch.eval.labels import LabelProvenance
+from vouch.l1.cache import EXTRACTOR_VERSION
+from vouch.l1.config import L1_CONFIG
 from vouch.l1.facts import FactStatus, RepoFacts
 from vouch.l3.join import CorroborationReport
 from vouch.l4.dimensions import DIMENSIONS, DimensionSpec
@@ -41,6 +46,7 @@ __all__ = [
     "build_task",
     "render_task",
     "pending_tasks",
+    "current_provenance",
     "append_label",
 ]
 
@@ -182,6 +188,33 @@ def render_task(task: LabelTask) -> str:
     return "\n".join(lines)
 
 
+def current_provenance(repo_root: Path | None = None) -> LabelProvenance:
+    """What the labeller is about to be shown, described well enough to reproduce.
+
+    ``dirty`` is recorded rather than refused. Labelling against a working tree is normal —
+    the harness is usually being improved in the same sitting — but it means the SHA does
+    not describe what was on screen, and a reader deserves to know that rather than trust a
+    hash that is only approximately true.
+    """
+    root = repo_root or Path(__file__).resolve().parents[2]
+
+    def git(*args: str) -> str:
+        try:
+            return subprocess.run(
+                ["git", "-C", str(root), *args],
+                capture_output=True, text=True, check=True,
+            ).stdout.strip()
+        except (subprocess.CalledProcessError, OSError):
+            return ""
+
+    return LabelProvenance(
+        code_sha=git("rev-parse", "HEAD"),
+        dirty=bool(git("status", "--porcelain", "--untracked-files=no")),
+        extractor_version=EXTRACTOR_VERSION,
+        l1_config=L1_CONFIG.fingerprint(),
+    )
+
+
 def pending_tasks(labelled: set[tuple[str, DimensionKey]], corpus_ids: list[str]):
     """Every (corpus row, dimension) pair not yet labelled, in a stable order."""
     for corpus_id in corpus_ids:
@@ -197,16 +230,36 @@ def append_label(
     verdict: Verdict,
     reason: str,
     split: str,
+    provenance: LabelProvenance | None = None,
 ) -> None:
     """Append one label to its pool, rewriting the file in place.
 
     Read-modify-write rather than a plain append, because the file has two pools and a
     label belongs to whichever the split assigned — not to whichever happens to be last.
+
+    ``provenance`` is stamped on the first write and **checked** on every one after. If the
+    extractor version or the L1 config has moved mid-round, the labels already in the file
+    were made against numbers that no longer render, and mixing the two silently would give
+    a pool whose rows answer subtly different questions. Refusing is the point.
     """
     raw = yaml.safe_load(path.read_text()) if path.is_file() else None
     data = raw if isinstance(raw, dict) else {}
     data.setdefault("train", [])
     data.setdefault("holdout", [])
+
+    if provenance is not None:
+        recorded = LabelProvenance.model_validate(data.get("metadata") or {})
+        if drifted := provenance.differs_from(recorded):
+            raise ValueError(
+                f"the code moved mid-round ({', '.join(drifted)}): "
+                f"{path} holds labels made against "
+                f"{recorded.extractor_version}/{recorded.l1_config}, this run renders "
+                f"{provenance.extractor_version}/{provenance.l1_config}. The evidence a "
+                "labeller was shown has changed, so the two sets do not belong in one "
+                "pool. Finish the round on the old code, or start a new file."
+            )
+        if not recorded.code_sha:
+            data["metadata"] = provenance.model_dump()
     data[split] = list(data[split] or []) + [
         {
             "corpus_id": corpus_id,
@@ -215,4 +268,8 @@ def append_label(
             "reason": reason.strip(),
         }
     ]
-    path.write_text(yaml.safe_dump(data, sort_keys=False, allow_unicode=True))
+    # Provenance first: it is the thing that decides whether anything below it still means
+    # what it meant when it was written, so it should be the first thing a reader sees.
+    ordered = {k: data[k] for k in ("metadata", "train", "holdout") if k in data}
+    ordered.update({k: v for k, v in data.items() if k not in ordered})
+    path.write_text(yaml.safe_dump(ordered, sort_keys=False, allow_unicode=True))

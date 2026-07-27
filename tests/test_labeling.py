@@ -24,10 +24,11 @@ from vouch.eval.labeling import (
     append_label,
     assign_split,
     build_task,
+    current_provenance,
     pending_tasks,
     render_task,
 )
-from vouch.eval.labels import LabelValidationError, load_labels
+from vouch.eval.labels import LabelProvenance, LabelValidationError, load_labels
 from vouch.ingest import ingest
 from vouch.l1.extract import extract_facts
 from vouch.l4.dimensions import DIMENSIONS
@@ -177,11 +178,100 @@ def test_a_written_label_reloads_through_the_validator(tmp_path: Path) -> None:
         Verdict.LIMITED,
         "two self-fixes over ten years, neither with a test in the same commit",
         "train",
+        provenance=_PROV,
     )
 
     labels = load_labels(path, known_ids={"hunter"})
     assert labels.total == 1
     assert labels.train[0].corpus_id == "hunter"
+
+
+# --- provenance: naming the code the judgement was made against -----------------------------
+
+_PROV = LabelProvenance(
+    code_sha="0123456789abcdef", extractor_version="l1-extract/2", l1_config="abc123def456"
+)
+
+
+def _write(path: Path, prov: LabelProvenance, corpus_id: str = "hunter") -> None:
+    append_label(
+        path,
+        corpus_id,
+        DimensionKey.OWNERSHIP,
+        Verdict.LIMITED,
+        "two self-fixes over ten years, neither with a test in the same commit",
+        "train",
+        provenance=prov,
+    )
+
+
+def test_labels_without_a_code_sha_are_refused_on_load(tmp_path: Path) -> None:
+    """An agreement number that cannot name the code it measured describes nothing."""
+    path = tmp_path / "labels.yaml"
+    path.write_text("train: []\nholdout: []\n")
+    _write(path, LabelProvenance())  # no sha to stamp
+
+    with pytest.raises(LabelValidationError, match="cannot name the code"):
+        load_labels(path)
+
+
+def test_the_first_write_stamps_the_code_it_was_made_against(tmp_path: Path) -> None:
+    path = tmp_path / "labels.yaml"
+    path.write_text("train: []\nholdout: []\n")
+    _write(path, _PROV)
+
+    assert load_labels(path).metadata.code_sha == "0123456789abcdef"
+    # First, so a reader meets it before the judgements it qualifies.
+    assert path.read_text().startswith("metadata:")
+
+
+def test_a_later_write_does_not_restamp_the_round(tmp_path: Path) -> None:
+    """The round is attributed to where it started, not to wherever it happened to end."""
+    path = tmp_path / "labels.yaml"
+    path.write_text("train: []\nholdout: []\n")
+    _write(path, _PROV)
+    _write(path, _PROV.model_copy(update={"code_sha": "ffffffffffffffff"}), "svcs")
+
+    labels = load_labels(path)
+    assert labels.total == 2
+    assert labels.metadata.code_sha == "0123456789abcdef"
+
+
+def test_an_extractor_bump_mid_round_is_refused(tmp_path: Path) -> None:
+    """The labeller would be shown different numbers, so the two do not share a pool."""
+    path = tmp_path / "labels.yaml"
+    path.write_text("train: []\nholdout: []\n")
+    _write(path, _PROV)
+
+    with pytest.raises(ValueError, match="the code moved mid-round"):
+        _write(path, _PROV.model_copy(update={"extractor_version": "l1-extract/3"}), "svcs")
+
+
+def test_a_config_change_mid_round_is_refused_too(tmp_path: Path) -> None:
+    path = tmp_path / "labels.yaml"
+    path.write_text("train: []\nholdout: []\n")
+    _write(path, _PROV)
+
+    with pytest.raises(ValueError, match="l1_config"):
+        _write(path, _PROV.model_copy(update={"l1_config": "999999999999"}), "svcs")
+
+
+def test_a_dirty_tree_is_recorded_rather_than_refused(tmp_path: Path) -> None:
+    """Labelling while the harness is being improved is normal; a silent sha is not."""
+    path = tmp_path / "labels.yaml"
+    path.write_text("train: []\nholdout: []\n")
+    _write(path, _PROV.model_copy(update={"dirty": True}))
+
+    assert load_labels(path).metadata.dirty is True
+
+
+def test_provenance_reads_this_repo(tmp_path: Path) -> None:
+    prov = current_provenance()
+
+    assert len(prov.code_sha) == 40, "not a resolved git sha"
+    assert prov.extractor_version and prov.l1_config
+    # A label does not depend on how the judge is prompted, so there is no field for it.
+    assert "prompt_version" not in LabelProvenance.model_fields
 
 
 def test_a_reason_carrying_an_address_fails_on_reload(tmp_path: Path) -> None:
