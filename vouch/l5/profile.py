@@ -34,6 +34,7 @@ from vouch.l3.join import CorroborationReport
 from vouch.l4.dimensions import DIMENSIONS
 from vouch.l4.schema import DimensionFinding, JudgeResult
 from vouch.l5.limitations import derive_limitations, derive_risks
+from vouch.l5.ordering import order_findings
 
 __all__ = [
     "L5_SCHEMA_VERSION",
@@ -46,9 +47,9 @@ __all__ = [
 
 L5_SCHEMA_VERSION = "l5/1"
 
-#: Dimension order in the report. Verification discipline leads because it is the one
-#: measured in both the commit trail and the session trail, so it is where corroboration
-#: is visible to a reader (docs/plan.md open question 2).
+#: The report's dimension order is no longer a constant — it is a function of how much
+#: evidence each dimension actually has. See :mod:`vouch.l5.ordering`. Verification
+#: discipline still leads among equals, for the reason it always did.
 DIMENSION_ORDER = [spec.key for spec in DIMENSIONS]
 
 
@@ -90,6 +91,11 @@ class Provenance(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     l1_schema: str = ""
+    # The frozen session snapshot the corroboration and telemetry were read from.
+    # Quoting it is what makes "re-run this and get the same document" checkable:
+    # `vouch profile --as-of <digest>` reproduces the run, and a different digest is
+    # the honest explanation for a profile that came out different.
+    session_snapshot: str = ""
     judge_model: str = ""
     prompt_version: str = ""
     downgrades: list[str] = Field(default_factory=list)
@@ -130,9 +136,7 @@ class Profile(BaseModel):
         return f"/p/{self.profile_id}"
 
 
-def _ordered(findings: list[DimensionFinding]) -> list[DimensionFinding]:
-    index = {key: i for i, key in enumerate(DIMENSION_ORDER)}
-    return sorted(findings, key=lambda f: index.get(f.dimension, len(index)))
+
 
 
 def build_profile(
@@ -141,6 +145,7 @@ def build_profile(
     metrics: SessionMetrics | None = None,
     corroboration: CorroborationReport | None = None,
     generated_at: datetime | None = None,
+    session_digest: str = "",
 ) -> Profile:
     """Assemble the profile and freeze it.
 
@@ -175,13 +180,16 @@ def build_profile(
     profile = Profile(
         subject=facts.subject.canonical_email,
         evidence_inspected=evidence,
-        findings=_ordered(judgment.findings) if judgment else [],
+        findings=order_findings(judgment.findings, facts, metrics)
+        if judgment
+        else [],
         risks_to_probe=derive_risks(judgment),
         corroboration=corr,
         confounds=list(facts.confounds),
         limitations=derive_limitations(facts, judgment, metrics, corroboration),
         provenance=Provenance(
             l1_schema=facts.schema_version,
+            session_snapshot=session_digest,
             judge_model=judgment.judge_model if judgment else "",
             prompt_version=judgment.prompt_version if judgment else "",
             downgrades=list(judgment.downgrades) if judgment else [],

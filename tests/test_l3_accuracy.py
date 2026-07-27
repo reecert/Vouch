@@ -38,8 +38,8 @@ def scored(tmp_path: Path):
 def test_join_is_correct_on_every_labelled_case(scored) -> None:
     metrics, _shas = scored
 
-    assert metrics.true_positive == 3
-    assert metrics.true_negative == 6
+    assert metrics.true_positive == 5
+    assert metrics.true_negative == 5
     assert metrics.ambiguous == 1
     assert metrics.wrong_session == 0
     assert metrics.false_positive == 0
@@ -47,12 +47,12 @@ def test_join_is_correct_on_every_labelled_case(scored) -> None:
 
 
 def test_accuracy_is_reported_but_not_claimed_as_evidence(scored) -> None:
-    """1.0/1.0 on ten labels is not a result. The harness says so itself."""
+    """1.0/1.0 on eleven labels is not a result. The harness says so itself."""
     metrics, _shas = scored
 
     assert metrics.precision == 1.0
     assert metrics.recall == 1.0
-    assert metrics.n_labelled == 10
+    assert metrics.n_labelled == 11
     assert metrics.status == "insufficient_n"
     assert metrics.is_evidence is False
     assert metrics.threshold == MIN_LABELS_FOR_ACCURACY

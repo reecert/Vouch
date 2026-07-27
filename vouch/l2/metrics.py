@@ -12,10 +12,12 @@ import statistics
 from collections import Counter
 from dataclasses import dataclass
 
+from vouch.l1.interval import Polarity, asymmetric_interval
 from vouch.l2.parser import EDIT_TOOLS, EventKind, ParseResult, Session
 from vouch.l2.payload import (
     DegradedReason,
     MetricKey,
+    MetricScope,
     Rate,
     SessionMetrics,
     ToolBucket,
@@ -37,19 +39,31 @@ class L2MinN:
 L2_MIN_N = L2MinN()
 
 
-def _rate(numerator: int, denominator: int, floor: int) -> Rate:
-    """A rate is suppressed below its floor, and *always* at a zero denominator.
+def _rate(
+    numerator: int,
+    denominator: int,
+    floor: int,
+    polarity: Polarity = Polarity.HIGHER_IS_BETTER,
+) -> Rate:
+    """A rate whose *point estimate* is suppressed below its floor, and always at zero n.
 
     The zero case is not just division safety: "0 observations" carries no information
     whatever floor is configured, so there is nothing to report either way.
+
+    The interval is attached regardless of suppression. Withholding the point estimate is
+    right — thin evidence does not support one — but withholding the range too leaves a
+    reader with silence where there was something honest to say.
     """
     suppressed = denominator == 0 or denominator < floor
+    interval = asymmetric_interval(numerator, denominator, polarity)
     return Rate(
         numerator=numerator,
         denominator=denominator,
         floor=floor,
         suppressed=suppressed,
         value=None if suppressed else round(numerator / denominator, 4),
+        low=interval.low,
+        high=interval.high,
     )
 
 
@@ -77,22 +91,27 @@ def _test_or_build_after_edit(sessions: list[Session]) -> tuple[int, int]:
     An "edit run" opens at the first edit and closes at whichever comes first: a verifying
     command (counted as verified), a human prompt (counted as unverified — the human moved
     on before anything was checked), or the end of the session.
+
+    Runs are closed per *transcript*. A subagent's work is folded into its parent session,
+    but the two ran concurrently, so a subagent's test run does not close an edit the main
+    thread had open — and would otherwise credit verification that never happened.
     """
     verified = total = 0
     for session in sessions:
-        pending = False
-        for event in session.events:
-            if event.tool in EDIT_TOOLS:
-                pending = True
-            elif pending and event.verifies:
-                verified += 1
+        for stream in session.streams():
+            pending = False
+            for event in stream:
+                if event.tool in EDIT_TOOLS:
+                    pending = True
+                elif pending and event.verifies:
+                    verified += 1
+                    total += 1
+                    pending = False
+                elif pending and event.kind is EventKind.HUMAN_PROMPT:
+                    total += 1
+                    pending = False
+            if pending:
                 total += 1
-                pending = False
-            elif pending and event.kind is EventKind.HUMAN_PROMPT:
-                total += 1
-                pending = False
-        if pending:
-            total += 1
     return verified, total
 
 
@@ -130,13 +149,21 @@ def _median(values: list[int]) -> float | None:
 
 
 def derive_metrics(
-    result: ParseResult, min_n: L2MinN | None = None
+    result: ParseResult,
+    min_n: L2MinN | None = None,
+    scope: MetricScope = MetricScope.MACHINE,
+    n_out_of_scope: int = 0,
 ) -> SessionMetrics:
     """Reduce a parse result to the upload payload.
 
     A degraded parse produces coverage counters and nothing else — no rates, no tool
     usage. Numbers derived from a log format we no longer understand are worse than no
     numbers, because they look the same as good ones.
+
+    ``scope`` states what population ``result`` covers; it is recorded on the payload and
+    is not inferred anywhere downstream. Callers that scope to a repo are expected to have
+    filtered ``result.sessions`` already — this function does not know what a repo is, and
+    keeping it that way is what stops L2 from reaching into L3.
     """
     from vouch.l2.parser import LOG_FORMAT, PARSER_VERSION
 
@@ -153,6 +180,9 @@ def derive_metrics(
         return SessionMetrics(
             parser_version=PARSER_VERSION,
             log_format=LOG_FORMAT,
+            scope=scope,
+            n_sessions_out_of_scope=n_out_of_scope,
+            as_of=result.as_of,
             degraded=True,
             degraded_reason=reason,
             n_sessions=len(result.sessions),
@@ -190,6 +220,9 @@ def derive_metrics(
     return SessionMetrics(
         parser_version=PARSER_VERSION,
         log_format=LOG_FORMAT,
+        scope=scope,
+        n_sessions_out_of_scope=n_out_of_scope,
+        as_of=result.as_of,
         degraded=False,
         degraded_reason=DegradedReason.NONE,
         n_sessions=len(sessions),
@@ -205,7 +238,12 @@ def derive_metrics(
                 verify_n, verify_d, min_n.edit_runs
             ),
             MetricKey.EDIT_REVISION: _rate(revise_n, revise_d, min_n.edited_files),
-            MetricKey.HUMAN_REDIRECT: _rate(redirect_n, redirect_d, min_n.sessions),
+            # Neither direction of `human_redirect` is a claim about the person: a
+            # human who redirects is engaged, and one who does not may be either
+            # trusting or absent. Neutral polarity, so its interval is symmetric.
+            MetricKey.HUMAN_REDIRECT: _rate(
+                redirect_n, redirect_d, min_n.sessions, Polarity.NEUTRAL
+            ),
         },
         tool_usage=dict(sorted(tools.items())),
         n_mcp_servers=len(mcp_servers),

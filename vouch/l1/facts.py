@@ -24,12 +24,15 @@ from enum import StrEnum
 from pydantic import BaseModel, Field
 
 from vouch.l1.identity import Identity
+from vouch.l1.interval import Interval, Polarity
 
 __all__ = [
     "SCHEMA_VERSION",
     "Locator",
     "FactStatus",
     "Unit",
+    "Polarity",
+    "Interval",
     "Fact",
     "ConfoundKey",
     "Severity",
@@ -73,17 +76,26 @@ class Unit(StrEnum):
 
 
 class Fact(BaseModel):
-    """One measurement, with its receipts and its denominator.
+    """One measurement, with its receipts, its denominator, and the range it supports.
 
     ``value`` is ``None`` unless ``status`` is ``MEASURED``. ``note`` explains a non-measured
     status in plain terms — it is rendered to the reader, so it says what was missing, not
     which code path fired.
+
+    **``interval`` is the quantity to publish, not ``value``.** A point estimate at small n
+    states something the data does not contain; the interval states what it does. The two
+    ends are drawn at different confidence levels, deliberately — see
+    :mod:`vouch.l1.interval`. An interval is present even on a suppressed fact, because
+    "somewhere between none and three in five" is more use to a reader than silence, and
+    considerably more use than a rounded zero.
     """
 
     key: str
     status: FactStatus
     value: float | None = None
     unit: Unit = Unit.FRACTION
+    polarity: Polarity = Polarity.NEUTRAL
+    interval: Interval | None = None
     numerator: int | None = None
     denominator: int | None = None
     evidence: list[Locator] = Field(default_factory=list)
@@ -92,6 +104,18 @@ class Fact(BaseModel):
     @property
     def is_measured(self) -> bool:
         return self.status is FactStatus.MEASURED
+
+    @property
+    def evidence_width(self) -> float:
+        """How much room the evidence leaves. 1.0 means it says nothing at all.
+
+        The ordering signal in L5: a dimension resting on a fact whose interval spans most
+        of the range has not earned a place at the top of a report, whatever its midpoint
+        happens to be.
+        """
+        if self.interval is None:
+            return 1.0
+        return self.interval.width
 
 
 class ConfoundKey(StrEnum):

@@ -44,9 +44,11 @@
           "sha": "6ac4f8f7dcd06ab49dc251858487d0147e47c3ad"
         }
       ],
+      "interval": null,
       "key": "ownership_loop",
       "note": "not assessable here \u2014 subject authored 12/12 human commits (100%); 1 distinct human author(s). With no other authors, fixing one's own bugs is the only option available, so the loop carries no ownership signal.",
       "numerator": null,
+      "polarity": "higher_is_better",
       "status": "not_assessable",
       "unit": "fraction",
       "value": null
@@ -54,9 +56,17 @@
     {
       "denominator": 12,
       "evidence": [],
+      "interval": {
+        "high": 0.1204,
+        "high_level": 0.8,
+        "low": 0.0,
+        "low_level": 0.95,
+        "method": "wilson"
+      },
       "key": "revert_rate",
       "note": "",
       "numerator": 0,
+      "polarity": "lower_is_better",
       "status": "measured",
       "unit": "fraction",
       "value": 0.0
@@ -75,9 +85,17 @@
           "sha": "6ac4f8f7dcd06ab49dc251858487d0147e47c3ad"
         }
       ],
+      "interval": {
+        "high": 0.9385,
+        "high_level": 0.95,
+        "low": 0.3212,
+        "low_level": 0.8,
+        "method": "wilson"
+      },
       "key": "test_accompanies_fix",
       "note": "",
       "numerator": 2,
+      "polarity": "higher_is_better",
       "status": "measured",
       "unit": "fraction",
       "value": 0.6667
@@ -101,9 +119,17 @@
           "sha": "6ac4f8f7dcd06ab49dc251858487d0147e47c3ad"
         }
       ],
+      "interval": {
+        "high": 27.0,
+        "high_level": 0.95,
+        "low": 20.0,
+        "low_level": 0.95,
+        "method": "order-statistic"
+      },
       "key": "followup_latency",
       "note": "",
       "numerator": null,
+      "polarity": "lower_is_better",
       "status": "measured",
       "unit": "days",
       "value": 23.0
@@ -111,9 +137,17 @@
     {
       "denominator": 11,
       "evidence": [],
+      "interval": {
+        "high": 1.0,
+        "high_level": 0.95,
+        "low": 1.0,
+        "low_level": 0.95,
+        "method": "order-statistic"
+      },
       "key": "commit_scoping",
       "note": "",
       "numerator": null,
+      "polarity": "neutral",
       "status": "measured",
       "unit": "files",
       "value": 1.0

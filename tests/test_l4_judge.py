@@ -12,7 +12,7 @@ import pytest
 from tests.fixtures import repos
 from vouch.ingest import ingest
 from vouch.l1.extract import extract_facts
-from vouch.l2.payload import MetricKey, Rate, SessionMetrics
+from vouch.l2.payload import MetricKey, MetricScope, Rate, SessionMetrics
 from vouch.l4.dimensions import DIMENSIONS, assess_availability
 from vouch.l4.grounding import build_allowlist, check_claims
 from vouch.l4.judge import JudgeError, apply_support_check, judge_profile
@@ -40,7 +40,10 @@ def repo_facts(tmp_path: Path):
 
 
 def _metrics(**rates) -> SessionMetrics:
+    # Repo-scoped, as a profile's telemetry must be: every dimension declares
+    # `MetricScope.REPO`, and machine-wide rates are refused rather than discounted.
     return SessionMetrics(
+        scope=MetricScope.REPO,
         n_sessions=20,
         rates={
             MetricKey.PLAN_BEFORE_EXECUTE: Rate(
@@ -238,6 +241,7 @@ class TestSupportCheck:
     def test_all_evidence_suppressed_becomes_insufficient(self, repo_facts) -> None:
         _repo, _snapshot, facts = repo_facts
         suppressed = SessionMetrics(
+            scope=MetricScope.REPO,
             rates={
                 MetricKey.PLAN_BEFORE_EXECUTE: Rate(
                     numerator=1, denominator=2, floor=5, suppressed=True

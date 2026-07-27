@@ -9,12 +9,20 @@ import pytest
 from tests.fixtures import repos
 from vouch.ingest import ingest
 from vouch.l1.extract import extract_facts
-from vouch.l2.payload import DegradedReason, MetricKey, Rate, SessionMetrics
+from vouch.l2.payload import (
+    DegradedReason,
+    MetricKey,
+    MetricScope,
+    Rate,
+    SessionMetrics,
+)
 from vouch.l3.join import CorroborationReport
+from vouch.l4.dimensions import DIMENSIONS
 from vouch.l4.judge import judge_profile
 from vouch.l4.mock import MockJudgeProvider, MockMode
 from vouch.l4.schema import DimensionKey, JudgeResult, Verdict
 from vouch.l5.limitations import STANDING_LIMITATIONS
+from vouch.l5.ordering import evidence_strength
 from vouch.l5.profile import DIMENSION_ORDER, Profile, build_profile
 
 SUBJECT = "alice@example.com"
@@ -39,6 +47,7 @@ def _judgment(repo, snapshot, facts, metrics=None) -> JudgeResult:
 
 def _metrics() -> SessionMetrics:
     return SessionMetrics(
+        scope=MetricScope.REPO,
         n_sessions=20,
         n_records=5000,
         rates={
@@ -56,13 +65,28 @@ class TestStructure:
         for forbidden in ("score", "overall", "rating", "grade", "rank", "percentile"):
             assert forbidden not in fields
 
-    def test_verification_discipline_leads(self, facts_for) -> None:
-        """It is measured in both trails, so it is where corroboration is visible."""
-        repo, snapshot, facts = facts_for()
-        profile = build_profile(facts, _judgment(repo, snapshot, facts, _metrics()))
+    def test_dimension_order_follows_the_evidence(self, facts_for) -> None:
+        """Position is a claim, so it is earned rather than assigned.
 
-        assert DIMENSION_ORDER[0] is DimensionKey.VERIFICATION_DISCIPLINE
-        assert profile.findings[0].dimension is DimensionKey.VERIFICATION_DISCIPLINE
+        Verification discipline used to lead unconditionally — it is the dimension measured
+        in both trails, which is a good reason to prefer it and a bad reason to pin it. A
+        fixed first slot asserts "this is the most informative readout here" even when it
+        rests on five observations. The order now sorts on evidence strength, with the old
+        preference kept only as the tie-break between comparable dimensions.
+        """
+        repo, snapshot, facts = facts_for()
+        profile = build_profile(
+            facts, _judgment(repo, snapshot, facts, _metrics()), _metrics()
+        )
+
+        assert DIMENSION_ORDER[0] is DimensionKey.VERIFICATION_DISCIPLINE  # the tie-break
+        strengths = [
+            evidence_strength(
+                next(s for s in DIMENSIONS if s.key is f.dimension), facts, _metrics()
+            )
+            for f in profile.findings
+        ]
+        assert strengths == sorted(strengths, reverse=True)
 
     def test_evidence_is_summarised_before_any_judgement(self, facts_for) -> None:
         repo, snapshot, facts = facts_for()

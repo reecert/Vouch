@@ -1,6 +1,6 @@
 """Synthetic Claude Code session logs.
 
-Modelled on the real format observed on 2026-07-26 (17,187 records across 54 files), but
+Modelled on the real format (17,187 records across 54 files), but
 built here so the suite runs offline and CI needs no session history.
 
 The shapes that matter and are easy to get wrong:
@@ -98,9 +98,17 @@ def denial(minute: int = 0) -> dict:
 
 
 def write_session(path: Path, records: list[dict]) -> Path:
-    """Write one session file. Records are written in order — order is the clock."""
+    """Write one session file. Records are written in order — order is the clock.
+
+    Every record is stamped with a session id taken from the filename, as the real logs
+    are. The builders above share one placeholder id for readability; leaving it in place
+    would make every fixture file claim to be the *same* session, which the parser now
+    correctly merges — and which would quietly turn a five-session fixture into a
+    one-session one.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text("".join(json.dumps(r) + "\n" for r in records))
+    stamped = [{**r, "sessionId": path.stem} for r in records]
+    path.write_text("".join(json.dumps(r) + "\n" for r in stamped))
     return path
 
 

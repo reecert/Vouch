@@ -44,11 +44,13 @@ from vouch.l1.facts import (
     Fact,
     FactStatus,
     Locator,
+    Polarity,
     RepoFacts,
     Severity,
     Unit,
 )
 from vouch.l1.identity import Identity, is_bot, resolve_identity
+from vouch.l1.interval import asymmetric_interval, median_interval
 from vouch.l1.paths import PathKind, classify, is_noise, is_test
 from vouch.schemas import CommitRecord, RepoSnapshot
 
@@ -232,6 +234,10 @@ def _fact_ownership_loop(self_fixes: list[SelfFix], config: L1Config) -> Fact:
         status=FactStatus.MEASURED,
         value=round(len(with_test) / len(returns), 4) if returns else None,
         unit=Unit.FRACTION,
+        polarity=Polarity.HIGHER_IS_BETTER,
+        interval=asymmetric_interval(
+            len(with_test), len(returns), Polarity.HIGHER_IS_BETTER
+        ),
         numerator=len(with_test),
         denominator=len(returns),
         evidence=evidence,
@@ -258,6 +264,10 @@ def _fact_revert_rate(
         status=FactStatus.MEASURED,
         value=round(len(reverted) / len(subject_commits), 4) if subject_commits else None,
         unit=Unit.FRACTION,
+        polarity=Polarity.LOWER_IS_BETTER,
+        interval=asymmetric_interval(
+            len(reverted), len(subject_commits), Polarity.LOWER_IS_BETTER
+        ),
         numerator=len(reverted),
         denominator=len(subject_commits),
         evidence=_locators(reverted),
@@ -276,6 +286,12 @@ def _fact_test_accompanies_fix(
         status=FactStatus.MEASURED,
         value=round(len(with_tests) / len(fixes), 4) if fixes else None,
         unit=Unit.FRACTION,
+        polarity=Polarity.HIGHER_IS_BETTER,
+        # The acceptance case for the whole interval change: 0 of 5 must publish as a wide
+        # range from zero, not as a confident 0.0 on the dimension that leads the report.
+        interval=asymmetric_interval(
+            len(with_tests), len(fixes), Polarity.HIGHER_IS_BETTER
+        ),
         numerator=len(with_tests),
         denominator=len(fixes),
         evidence=_locators([(c.sha, None) for c in with_tests]),
@@ -294,6 +310,8 @@ def _fact_followup_latency(self_fixes: list[SelfFix]) -> Fact:
         status=FactStatus.MEASURED,
         value=round(statistics.median(gaps), 2) if gaps else None,
         unit=Unit.DAYS,
+        polarity=Polarity.LOWER_IS_BETTER,
+        interval=median_interval(list(gaps)),
         numerator=None,
         denominator=len(gaps),
         evidence=_locators([(sf.fix.sha, sf.path) for sf in self_fixes]),
@@ -315,6 +333,10 @@ def _fact_commit_scoping(subject_commits: list[CommitRecord]) -> Fact:
         status=FactStatus.MEASURED,
         value=round(statistics.median(counts), 2) if counts else None,
         unit=Unit.FILES,
+        # Neutral: a small median is focused work or trivial work, a large one is thorough
+        # or sprawling. The fact is context for the reader, not a score.
+        polarity=Polarity.NEUTRAL,
+        interval=median_interval([float(c) for c in counts]),
         numerator=None,
         denominator=len(counts),
         evidence=[],
@@ -362,6 +384,7 @@ def _apply_suppression(
                     update={
                         "status": FactStatus.NOT_ASSESSABLE,
                         "value": None,
+                        "interval": None,
                         "numerator": None,
                         "denominator": None,
                         "note": f"not assessable here — {blocker.detail}",
@@ -377,9 +400,14 @@ def _apply_suppression(
                     update={
                         "status": FactStatus.SUPPRESSED_LOW_N,
                         "value": None,
+                        # The interval survives on purpose. Suppression withholds the
+                        # *point estimate*, which is the thing thin evidence cannot
+                        # support; the range is exactly what it can, and publishing it
+                        # beats publishing nothing.
                         "note": (
-                            f"suppressed: {f.denominator or 0} observation(s), below the "
-                            f"floor of {floor}. A rate this thin is not reported."
+                            f"no point estimate: {f.denominator or 0} observation(s), "
+                            f"below the floor of {floor}. The interval is what this "
+                            f"much evidence supports."
                         ),
                     }
                 )

@@ -155,13 +155,33 @@ def apply_support_check(
 ) -> tuple[DimensionFinding, str | None]:
     """Downgrade a verdict the evidence does not carry. Never upgrades.
 
-    Three ways a conclusive verdict fails to stand:
+    Four ways a conclusive verdict fails to stand:
 
     * the input layer was absent — `not_assessed`;
+    * the only input was measured at the wrong scope — `not_assessable`;
     * nothing measurable survived suppression — `insufficient_evidence`;
     * the model asserted something but sourced none of it — `insufficient_evidence`.
     """
     spec = availability.spec
+
+    if availability.is_not_assessable:
+        if finding.verdict is Verdict.NOT_ASSESSABLE:
+            return finding, None
+        return (
+            finding.model_copy(
+                update={
+                    "verdict": Verdict.NOT_ASSESSABLE,
+                    "confidence": Confidence.LOW,
+                    "limitations": [
+                        *finding.limitations,
+                        "The session telemetry available covers this machine rather than "
+                        "this repository, so it cannot speak to work done here.",
+                    ],
+                }
+            ),
+            f"{spec.key.value}: {finding.verdict.value} -> not_assessable "
+            f"(evidence measured at {spec.scope.value} scope was unavailable)",
+        )
 
     if not availability.was_looked_at:
         if finding.verdict is Verdict.NOT_ASSESSED:
@@ -239,6 +259,25 @@ def judge_profile(
 
     for spec in DIMENSIONS:
         availability = assess_availability(spec, facts, metrics, len(judgments))
+
+        if availability.is_not_assessable:
+            findings.append(
+                DimensionFinding(
+                    dimension=spec.key,
+                    verdict=Verdict.NOT_ASSESSABLE,
+                    confidence=Confidence.LOW,
+                    summary=(
+                        "Not assessable: the session telemetry supplied was measured "
+                        "across this machine, not this repository, so it cannot support "
+                        "a claim about work done here."
+                    ),
+                    limitations=[
+                        "Re-run the local session CLI scoped to this repository to make "
+                        "this dimension assessable."
+                    ],
+                )
+            )
+            continue
 
         if not availability.was_looked_at:
             findings.append(

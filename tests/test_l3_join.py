@@ -77,10 +77,22 @@ def test_edits_after_the_commit_do_not_corroborate_it(joined) -> None:
     assert verdict_for(report, shas[4]).verdict is CorroborationVerdict.UNCORROBORATED
 
 
-def test_stale_session_beyond_the_lag_window_does_not_corroborate(joined) -> None:
-    """"You edited this file once, five days ago" is not evidence for this commit."""
+def test_high_overlap_is_not_rejected_on_lag_alone(joined) -> None:
+    """A sole editor five days out corroborates, and the lag is reported, not hidden.
+
+    The previous scorer capped lag at 48 hours and dropped this match outright. Nothing
+    else ever touched `src/f.py`, so dropping it did not withhold a *doubtful* claim — it
+    manufactured "no session evidence" for a commit that had some, which is the reading a
+    screener acts on. Time is now a weak prior carried in the basis, not a gate.
+    """
     report, shas, _repo, _sessions = joined
-    assert verdict_for(report, shas[5]).verdict is CorroborationVerdict.UNCORROBORATED
+    record = verdict_for(report, shas[5])
+
+    assert record.verdict is CorroborationVerdict.CORROBORATED
+    assert record.basis.session_ref == "S6"
+    assert record.basis.path_overlap == 1.0
+    # Five days, stated plainly, for a reader to weigh.
+    assert record.basis.lag_seconds == 120 * 3600
 
 
 def test_partial_overlap_at_and_below_the_floor(joined) -> None:
@@ -109,8 +121,11 @@ def test_session_from_another_project_is_excluded(joined) -> None:
 
     assert verdict_for(report, shas[9]).verdict is CorroborationVerdict.UNCORROBORATED
     # ...and the out-of-repo session is dropped before scoring, not scored and rejected.
-    assert report.n_sessions == 10
-    assert report.n_sessions_in_repo == 9
+    assert report.n_sessions == 12
+    assert report.n_sessions_in_repo == 11
+    # The drop is loud: that path is accounted for as another project's, not as a gap.
+    assert report.path_coverage.n_outside == 1
+    assert report.path_coverage.n_dropped == 0
 
 
 def test_one_session_can_corroborate_several_commits(tmp_path: Path) -> None:
@@ -217,22 +232,26 @@ def test_session_edits_are_relativized_to_the_repo(tmp_path: Path) -> None:
     joins.build_repo_for_join(repo)
     joins.write_sessions(repo, tmp_path / "logs")
 
-    edits = session_edits(parse_log_dir(tmp_path / "logs").sessions, repo)
+    edits, coverage = session_edits(parse_log_dir(tmp_path / "logs").sessions, repo)
     by_id = {e.session_id: e for e in edits}
 
     assert by_id["S1"].paths == frozenset({"src/a.py"})  # not the absolute path
     assert "S10" not in by_id  # the other project never enters the join
+    assert coverage.n_outside == 1  # and its path is counted, not silently discarded
 
 
 def test_report_counts_and_coverage(joined) -> None:
     report, _shas, _repo, _sessions = joined
 
-    assert report.n_commits == 10
-    assert report.n_corroborated == 3
+    assert report.n_commits == 11
+    assert report.n_corroborated == 5
     assert report.n_ambiguous == 1
-    assert report.n_uncorroborated == 6
-    assert report.coverage == pytest.approx(0.3)
+    assert report.n_uncorroborated == 5
+    assert report.coverage == pytest.approx(5 / 11)
     assert report.config_fingerprint  # the thresholds behind the verdicts are recorded
+    # Every edited path is accounted for somewhere. A ledger that does not add up is the
+    # defect this counter exists to expose.
+    assert report.path_coverage.n_total == 14
 
 
 def test_temporal_decay_prefers_the_closer_session(tmp_path: Path) -> None:
@@ -279,3 +298,28 @@ def test_temporal_decay_prefers_the_closer_session(tmp_path: Path) -> None:
     assert record.verdict is CorroborationVerdict.CORROBORATED
     assert record.basis.session_ref == "NEAR"
     assert record.basis.lag_seconds == int(timedelta(minutes=15).total_seconds())
+
+
+def test_an_open_session_does_not_win_on_unrelated_later_activity(joined) -> None:
+    """The clamp, and why the temporal term was doing no work.
+
+    `S11long` touched `src/p.py` thirty hours before the commit and then kept going, ending
+    with an edit to an *unrelated* file after the commit landed. The previous scorer
+    measured lag from the session envelope and clamped it to zero whenever the session was
+    still open at commit time, so `S11long` scored a perfect temporal 1.0 — earned entirely
+    by activity that had nothing to do with this commit — and beat `S11short`, which had
+    edited `src/p.py` an hour earlier and actually produced it.
+
+    That clamp is why roughly 40% of the match score did no discriminating: any session
+    spanning the commit scored full marks on it. Attribution replaces it — the path goes to
+    whoever touched *that path* last, so unrelated later activity buys nothing.
+    """
+    report, shas, _repo, _sessions = joined
+    record = verdict_for(report, shas[10])
+
+    assert record.verdict is CorroborationVerdict.CORROBORATED
+    assert record.basis.session_ref == "S11short"
+    # S11long is not merely out-scored, it holds no path at all and never becomes a
+    # candidate — so this cannot degrade into an `ambiguous` coin flip either.
+    assert record.basis.n_candidates == 1
+    assert record.basis.lag_seconds == 3600

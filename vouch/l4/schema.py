@@ -52,13 +52,18 @@ class DimensionKey(StrEnum):
 
 
 class Verdict(StrEnum):
-    """A dimension's outcome. Three of these six are ways of declining to conclude."""
+    """A dimension's outcome. Four of these seven are ways of declining to conclude."""
 
     STRONG = "strong"
     MODERATE = "moderate"
     LIMITED = "limited"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"  # looked; not enough to say
     NOT_ASSESSED = "not_assessed"  # did not look; the input was absent
+    # Looked, and the evidence that exists is not valid at the scope this dimension claims
+    # — session telemetry from other projects cannot describe work in this repository.
+    # Distinct from `insufficient_evidence` because the remedy is different: more data of
+    # the same kind would not help, only data of the right kind would.
+    NOT_ASSESSABLE = "not_assessable"
     CONTRADICTED = "contradicted"  # looked; the evidence points the other way
 
 

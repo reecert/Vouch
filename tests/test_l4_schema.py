@@ -53,6 +53,7 @@ def test_verdict_vocabulary_is_closed_and_includes_the_declines() -> None:
         "limited",
         "insufficient_evidence",
         "not_assessed",
+        "not_assessable",
         "contradicted",
     }
 

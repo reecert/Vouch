@@ -157,3 +157,43 @@ def short_window(path: Path) -> list[str]:
         s.date = day(i // 3)  # compress ~50 days into ~5
         steps.append(s)
     return build_repo(path, steps)
+
+
+def early_career(path: Path) -> list[str]:
+    """The shape the product is actually for — and the one its floors were blind to.
+
+    Modelled on `wagtail-contrib` in `eval/repos.yaml`: an early-career contributor to a
+    large, healthy project. A few dozen commits, a handful of fix commits, **none** of them
+    carrying a test. `MinN.fix_commits` is 3 and there are 5, so the floor is cleared and
+    `test_accompanies_fix` publishes — the damning direction of exactly the failure the
+    floors were built to stop in the flattering direction.
+
+    Deliberately not deformed along any confound axis. Nothing here is wrong with the
+    history; the reading of it was.
+    """
+    steps = [
+        Step(BOB, day(0), "feat: initial import", {"src/core.py": src("None")}),
+        Step(BOB, day(1), "feat: add the api", {"src/api.py": src("None")}),
+        Step(BOB, day(2), "test: cover the core", {"tests/test_core.py": test_file("core")}),
+    ]
+    # Twelve ordinary contributions, none of them fixes.
+    for i in range(12):
+        steps.append(
+            Step(
+                ALICE,
+                day(10 + i * 7),
+                f"feat: add widget {i}",
+                {f"src/widget_{i}.py": src("None")},
+            )
+        )
+    # Five fix commits, none with a test. This is the 0/5 the report used to print as 0.0.
+    for i in range(5):
+        steps.append(
+            Step(
+                ALICE,
+                day(120 + i * 20),
+                f"fix: correct widget {i} boundary case",
+                {f"src/widget_{i}.py": src("1")},
+            )
+        )
+    return build_repo(path, steps)

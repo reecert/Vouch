@@ -19,7 +19,7 @@ rather than procedural:
 """
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, datetime
 from enum import StrEnum
 
 from pydantic import BaseModel, ConfigDict, Field
@@ -27,6 +27,7 @@ from pydantic import BaseModel, ConfigDict, Field
 __all__ = [
     "PAYLOAD_SCHEMA_VERSION",
     "MetricKey",
+    "MetricScope",
     "ToolBucket",
     "DegradedReason",
     "Rate",
@@ -34,7 +35,26 @@ __all__ = [
     "bucket_for",
 ]
 
-PAYLOAD_SCHEMA_VERSION = "l2/1"
+PAYLOAD_SCHEMA_VERSION = "l2/2"
+
+
+class MetricScope(StrEnum):
+    """What population a metric was computed over. Declared, never inferred.
+
+    The defect this exists to prevent: L2 reads `~/.claude/projects`, which is every
+    project on the machine, while L1 and L3 read one repo. A rate derived from the first
+    was being handed to a dimension that claims something about the second, so
+    `plan_before_execute` could be dominated by a client project the profile never mentions
+    — and the reader had no way to see it, because a rate carries a denominator but not a
+    population.
+
+    ``MACHINE`` is honest and useful on its own terms (it is what the user sees in the
+    upload preview). It is simply not admissible evidence about one repository, and the
+    scope contract in :mod:`vouch.l4.dimensions` is what enforces that.
+    """
+
+    MACHINE = "machine"
+    REPO = "repo"
 
 
 class MetricKey(StrEnum):
@@ -104,11 +124,18 @@ def bucket_for(tool: str) -> ToolBucket:
 
 
 class Rate(BaseModel):
-    """A numerator over a denominator, with its floor and whether it was suppressed.
+    """A numerator over a denominator, with its floor, its interval, and whether the point
+    estimate was suppressed.
 
     ``value`` is ``None`` when the denominator is below ``floor``. The denominator travels
     regardless: the competitor publishes five percentages off 18 sessions with no visible
     floor, and the cheapest way to be more honest than that is to show the divisor.
+
+    ``low``/``high`` are the range the observations actually support, drawn asymmetrically
+    — the bound that would read badly for the subject is held to a stricter confidence
+    level than the one that would read well. See :mod:`vouch.l1.interval` for why the two
+    errors are not worth the same. Both are plain floats rather than a nested model so the
+    payload stays flat and the closure test keeps working on scalars.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -118,6 +145,8 @@ class Rate(BaseModel):
     floor: int = 0
     suppressed: bool = False
     value: float | None = None
+    low: float | None = None
+    high: float | None = None
 
 
 class SessionMetrics(BaseModel):
@@ -130,6 +159,11 @@ class SessionMetrics(BaseModel):
     parser_version: str = ""
     log_format: str = ""
 
+    # What population every rate below was computed over. A consumer that needs
+    # repo-scoped evidence checks this rather than assuming.
+    scope: MetricScope = MetricScope.MACHINE
+    n_sessions_out_of_scope: int = 0  # seen on this machine, excluded from these rates
+
     # Coverage — reported so that partial parsing is visible rather than silent.
     degraded: bool = False
     degraded_reason: DegradedReason = DegradedReason.NONE
@@ -141,6 +175,12 @@ class SessionMetrics(BaseModel):
 
     window_first: date | None = None
     window_last: date | None = None
+
+    # The session snapshot these metrics were read from. `as_of` is the newest log
+    # modification time seen; the digest that actually identifies the snapshot lives
+    # in the profile's provenance, because a content hash of log bytes is not a thing
+    # this payload should carry off the machine.
+    as_of: datetime | None = None
 
     rates: dict[MetricKey, Rate] = Field(default_factory=dict)
     tool_usage: dict[ToolBucket, int] = Field(default_factory=dict)

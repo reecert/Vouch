@@ -28,9 +28,17 @@
     {
       "denominator": 0,
       "evidence": [],
+      "interval": {
+        "high": 1.0,
+        "high_level": 0.95,
+        "low": 0.0,
+        "low_level": 0.8,
+        "method": "wilson"
+      },
       "key": "ownership_loop",
-      "note": "suppressed: 0 observation(s), below the floor of 3. A rate this thin is not reported.",
+      "note": "no point estimate: 0 observation(s), below the floor of 3. The interval is what this much evidence supports.",
       "numerator": 0,
+      "polarity": "higher_is_better",
       "status": "suppressed_low_n",
       "unit": "fraction",
       "value": null
@@ -38,9 +46,17 @@
     {
       "denominator": 12,
       "evidence": [],
+      "interval": {
+        "high": 0.1204,
+        "high_level": 0.8,
+        "low": 0.0,
+        "low_level": 0.95,
+        "method": "wilson"
+      },
       "key": "revert_rate",
       "note": "",
       "numerator": 0,
+      "polarity": "lower_is_better",
       "status": "measured",
       "unit": "fraction",
       "value": 0.0
@@ -59,9 +75,17 @@
           "sha": "674ba11e6ead877833bedc0cd1289c4532d7b534"
         }
       ],
+      "interval": {
+        "high": 0.9385,
+        "high_level": 0.95,
+        "low": 0.3212,
+        "low_level": 0.8,
+        "method": "wilson"
+      },
       "key": "test_accompanies_fix",
       "note": "",
       "numerator": 2,
+      "polarity": "higher_is_better",
       "status": "measured",
       "unit": "fraction",
       "value": 0.6667
@@ -85,9 +109,17 @@
           "sha": "a10744028041654097c453924797a9b03dacdd15"
         }
       ],
+      "interval": {
+        "high": 2.0,
+        "high_level": 0.95,
+        "low": 1.0,
+        "low_level": 0.95,
+        "method": "order-statistic"
+      },
       "key": "followup_latency",
       "note": "",
       "numerator": null,
+      "polarity": "lower_is_better",
       "status": "measured",
       "unit": "days",
       "value": 2.0
@@ -95,9 +127,17 @@
     {
       "denominator": 11,
       "evidence": [],
+      "interval": {
+        "high": 1.0,
+        "high_level": 0.95,
+        "low": 1.0,
+        "low_level": 0.95,
+        "method": "order-statistic"
+      },
       "key": "commit_scoping",
       "note": "",
       "numerator": null,
+      "polarity": "neutral",
       "status": "measured",
       "unit": "files",
       "value": 1.0

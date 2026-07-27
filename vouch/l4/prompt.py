@@ -25,7 +25,9 @@ from vouch.l4.schema import CommitJudgment
 __all__ = ["PROMPT_VERSION", "commit_system", "commit_user", "dimension_system",
            "dimension_user"]
 
-PROMPT_VERSION = "l4-diff/1"
+# Bumped when facts started being presented as intervals rather than point estimates.
+# Any calibration measured against `/1` was measured against a different question.
+PROMPT_VERSION = "l4-diff/2"
 
 
 def commit_system() -> str:
@@ -57,6 +59,25 @@ def commit_user(diff: CommitDiff) -> str:
     return f"Assess this commit.\n\n{diff.render()}"
 
 
+def _band(fact) -> str:
+    """Render a fact as the range its evidence supports, with the point estimate after it.
+
+    The interval leads deliberately. Handing the model `0.0 (0/5)` invites the sentence
+    "never ships a test with a fix", which five observations do not support; handing it
+    `0.00-0.43` invites "somewhere between none and about two in five", which they do. The
+    model is constrained by a schema but it is not constrained to read a number carefully,
+    so the number is presented in the form that is hard to overstate.
+    """
+    unit = "" if fact.unit.value == "fraction" else f" {fact.unit.value}"
+    if fact.interval is None:
+        return f"{fact.value}{unit}"
+    return (
+        f"{fact.interval.low:g}-{fact.interval.high:g}{unit} "
+        f"(point estimate {fact.value}{unit}; "
+        f"bounds at {fact.interval.low_level:.0%}/{fact.interval.high_level:.0%})"
+    )
+
+
 def _render_facts(facts: RepoFacts, keys: tuple[str, ...]) -> str:
     if not keys:
         return "  (this dimension has no commit-trail facts)"
@@ -67,8 +88,16 @@ def _render_facts(facts: RepoFacts, keys: tuple[str, ...]) -> str:
             continue
         if fact.status is FactStatus.MEASURED:
             lines.append(
-                f"  {key}: {fact.value} {fact.unit.value} "
-                f"({fact.numerator}/{fact.denominator})"
+                f"  {key}: {_band(fact)} from {fact.numerator}/{fact.denominator}"
+                if fact.numerator is not None
+                else f"  {key}: {_band(fact)} over {fact.denominator} observation(s)"
+            )
+        elif fact.interval is not None:
+            # Suppressed means no point estimate, not no information.
+            lines.append(
+                f"  {key}: no point estimate — the evidence supports "
+                f"{fact.interval.low:g}-{fact.interval.high:g} "
+                f"from {fact.denominator} observation(s)"
             )
         else:
             lines.append(f"  {key}: {fact.status.value} — {fact.note}")
@@ -86,14 +115,20 @@ def _render_metrics(metrics: SessionMetrics | None, availability: EvidenceAvaila
         rate = metrics.rates.get(key)
         if rate is None:
             continue
+        band = (
+            f"{rate.low:g}-{rate.high:g}"
+            if rate.low is not None and rate.high is not None
+            else "unknown"
+        )
         if rate.suppressed:
             lines.append(
-                f"  {key.value}: suppressed — {rate.denominator} observation(s), "
-                f"below the floor of {rate.floor}"
+                f"  {key.value}: no point estimate — {rate.denominator} observation(s), "
+                f"below the floor of {rate.floor}; the evidence supports {band}"
             )
         else:
             lines.append(
-                f"  {key.value}: {rate.value} ({rate.numerator}/{rate.denominator})"
+                f"  {key.value}: {band} (point estimate {rate.value}; "
+                f"{rate.numerator}/{rate.denominator})"
             )
     return "\n".join(lines) or "  (none)"
 

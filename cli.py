@@ -12,13 +12,21 @@ from vouch.eval import (
     load_labels,
     run_eval,
 )
-from vouch.ingest import ingest, resolve_repo
+from vouch.ingest import DEFAULT_CACHE_DIR, ingest, resolve_repo
 from vouch.l1.extract import extract_facts
 from vouch.l2.metrics import derive_metrics
-from vouch.l2.parser import parse_log_dir
-from vouch.l2.payload import SessionMetrics
+from vouch.l2.parser import default_log_dir, parse_snapshot
+from vouch.l2.payload import MetricScope, SessionMetrics
 from vouch.l2.preview import render_payload, render_preview
-from vouch.l3.join import join
+from vouch.l2.snapshot import open_snapshot, snapshot_sessions
+from vouch.l3.join import join, sessions_in_repo
+from vouch.l3.repo_identity import (
+    HistoricalRoot,
+    discover_candidate_roots,
+    history_paths,
+    load_identity_file,
+    resolve_identity,
+)
 from vouch.l4.judge import JudgeError, judge_profile
 from vouch.l4.prompt import PROMPT_VERSION
 from vouch.l4.providers import build_default_provider
@@ -30,6 +38,15 @@ app = typer.Typer(help="vouch — evidence-backed capability profiles from real 
 # inline would be a function call in an argument default.
 _ALIAS = typer.Option(
     [], "--alias", help="Additional address this person commits under. Repeatable."
+)
+_HISTORICAL_ROOT = typer.Option(
+    [],
+    "--historical-root",
+    help=(
+        "A previous absolute path of this repo, so sessions recorded before a move still "
+        "correlate. Repeatable. Adds to .vouch/identity.yaml rather than replacing it; "
+        "run `vouch identity --propose` to see candidates."
+    ),
 )
 
 
@@ -75,6 +92,15 @@ def profile(
         "--log-dir",
         help="Correlate against session logs in this directory (local join, L3).",
     ),
+    historical_root: list[str] = _HISTORICAL_ROOT,
+    as_of: str | None = typer.Option(
+        None,
+        "--as-of",
+        help=(
+            "Re-read an earlier session snapshot by digest instead of taking a new one. "
+            "Two runs at the same --as-of produce a byte-identical profile."
+        ),
+    ),
     out: str | None = typer.Option(None, "--out", help="Write the JSON to this path."),
     web_dir: str | None = typer.Option(
         None,
@@ -91,14 +117,57 @@ def profile(
     snapshot = ingest(repo_url)
     facts_result = extract_facts(snapshot, author, repo_path, aliases=list(alias))
 
+    identity = resolve_identity(
+        repo_path,
+        declared=[
+            *load_identity_file(repo_path).historical_roots,
+            *(HistoricalRoot(path=p, why="--historical-root") for p in historical_root),
+        ],
+    )
+
     metrics: SessionMetrics | None = None
     if sessions_file:
         metrics = SessionMetrics.model_validate_json(Path(sessions_file).read_text())
+        if metrics.scope is not MetricScope.REPO:
+            # Loud, and not silently downgraded: a machine-wide payload is a fine thing to
+            # hold, it just cannot describe work in this repo. The dimensions that depend
+            # on it will report `not_assessable` rather than borrowing another project's
+            # behaviour. Pass --log-dir to derive the repo-scoped version instead.
+            typer.echo(
+                f"warning: {sessions_file} was measured at {metrics.scope.value} scope; "
+                "dimensions needing repo-scoped telemetry will be not_assessable",
+                err=True,
+            )
 
     corroboration = None
-    if log_dir:
-        parsed = parse_log_dir(Path(log_dir))
-        corroboration = join(snapshot.commits, parsed.sessions, repo_path)
+    session_digest = ""
+    if log_dir or as_of:
+        # Read a frozen copy, never the live directory: this CLI is typically run from
+        # inside a session that is still appending to it, and observing its own writes
+        # makes the profile a function of when it ran.
+        frozen = (
+            open_snapshot(as_of, DEFAULT_CACHE_DIR)
+            if as_of
+            else snapshot_sessions(
+                Path(log_dir) if log_dir else default_log_dir(), DEFAULT_CACHE_DIR
+            )
+        )
+        session_digest = frozen.digest
+        typer.echo(
+            f"session snapshot: {frozen.digest} "
+            f"({frozen.n_files} file(s), as of {frozen.as_of})",
+            err=True,
+        )
+        parsed = parse_snapshot(frozen)
+        corroboration = join(snapshot.commits, parsed.sessions, identity)
+        # Session metrics for a profile about *this repo* are derived from the sessions
+        # that touched this repo, and nothing else.
+        scoped, n_out = sessions_in_repo(parsed.sessions, identity)
+        metrics = derive_metrics(
+            parsed.narrowed_to(scoped),
+            scope=MetricScope.REPO,
+            n_out_of_scope=n_out,
+        )
 
     try:
         result = judge_profile(
@@ -114,7 +183,9 @@ def profile(
         typer.echo("(run `vouch facts` to inspect the deterministic layer)", err=True)
         raise typer.Exit(1) from e
 
-    profile_doc = build_profile(facts_result, result, metrics, corroboration)
+    profile_doc = build_profile(
+        facts_result, result, metrics, corroboration, session_digest=session_digest
+    )
     payload = profile_doc.model_dump_json(indent=2)
 
     if web_dir:
@@ -153,7 +224,8 @@ def sessions(
     free-text field, so there is nothing for them to travel in. If the log format is not
     understood, this degrades to git-only mode and emits coverage counters with no rates.
     """
-    result = parse_log_dir(Path(log_dir) if log_dir else None)
+    source = Path(log_dir) if log_dir else default_log_dir()
+    result = parse_snapshot(snapshot_sessions(source, DEFAULT_CACHE_DIR))
     metrics = derive_metrics(result)
 
     typer.echo(render_preview(result, metrics))
@@ -170,6 +242,68 @@ def sessions(
         typer.echo(f"wrote {out}", err=True)
     else:
         typer.echo(payload)
+
+
+@app.command("identity")
+def identity_(
+    repo_url: str = typer.Argument(..., help="Public git repo URL (or local path)."),
+    log_dir: str | None = typer.Option(
+        None, "--log-dir", help="Session log root (default: ~/.claude/projects)."
+    ),
+    propose: bool = typer.Option(
+        False, "--propose", help="Scan the logs for directories this repo may have moved from."
+    ),
+) -> None:
+    """Show which filesystem paths count as this repo, and what else might have.
+
+    ``--propose`` reads the session logs and reports directories whose files git recognises
+    from this history — the signature of a repo that was renamed or moved. **It proposes
+    only.** A fork, a template, or a copy taken before the rename would score the same way,
+    and promoting a guess to evidence is the failure the join exists to avoid. Accept a
+    proposal by writing it into `.vouch/identity.yaml`, where it becomes a declaration the
+    resolver checks against git history path by path.
+    """
+    repo_path = resolve_repo(repo_url)
+    identity = resolve_identity(repo_path)
+
+    typer.echo(f"canonical root : {identity.canonical_root}")
+    typer.echo(
+        f"filesystem     : {'case-insensitive' if identity.case_insensitive else 'case-sensitive'}"
+    )
+    for root in identity.historical_display or ("(none declared)",):
+        typer.echo(f"historical     : {root}")
+
+    if not propose:
+        return
+
+    source = Path(log_dir) if log_dir else default_log_dir()
+    parsed = parse_snapshot(snapshot_sessions(source, DEFAULT_CACHE_DIR))
+    observed = [
+        (raw, event.cwd)
+        for session in parsed.sessions
+        for event in session.events
+        for raw in event.paths
+    ]
+    known = history_paths(repo_path)
+    candidates = discover_candidate_roots(observed, identity, known)
+
+    typer.echo(f"\nscanned {len(parsed.sessions)} session(s), {len(observed)} edited path(s)")
+    if not candidates:
+        typer.echo("no candidate historical roots found")
+        return
+
+    typer.echo("\ncandidate historical roots — PROPOSALS, not conclusions:")
+    for cand in candidates:
+        typer.echo(
+            f"  {cand.root}\n"
+            f"    {cand.n_known}/{cand.n_paths} edited paths are known to this history "
+            f"({cand.share_known:.0%}); e.g. {', '.join(cand.examples)}"
+        )
+    typer.echo(
+        "\nA high share is consistent with a rename — and equally consistent with a fork "
+        "or a copy.\nDeclare one in .vouch/identity.yaml only if you know the repo lived "
+        "there."
+    )
 
 
 @app.command("eval")
