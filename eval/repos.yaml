@@ -1,6 +1,6 @@
 # The calibration corpus: twelve real public repos, one target author each.
 #
-# Selected 2026-07-26 for phase 1f; rows 11-12 added 2026-07-27. Every claim below about a
+# Every claim below about a
 # repo's shape was MEASURED by running `vouch.l1.confounds.compute_stats` +
 # `detect_confounds` — the same code the pipeline uses — against a real clone, not asserted
 # from memory. The `measured:` block on each entry is that output, and `head:` pins the
@@ -104,7 +104,7 @@ repos:
         followup_latency: 24.0
         commit_scoping: 1.0
     why: >
-      99% solo and still active (last commit 2026-07-26). Chosen as the second solo case
+      99% solo and still active. Chosen as the second solo case
       because it is recent and small-scoped, where hunter is old and large — so the pair
       does not confound "solo" with "ancient". `test_accompanies_fix` measures a LOW 0.164
       here, which makes it a useful check that the judge will report a weak number as weak
@@ -192,8 +192,8 @@ repos:
         commit_scoping: 2.0
     why: >
       The most team-shaped repo found: 1153 human authors, 4529 merge commits, and the
-      top author holds only 16%. The subject is one core dev among many, active to
-      2026-06. `unresolved_identity_aliases` fires here incidentally and is left
+      top author holds only 16%. The subject is one core dev among many, recently active.
+      `unresolved_identity_aliases` fires here incidentally and is left
       unclaimed on purpose — see notes.aliases.
 
   - id: flask
@@ -255,7 +255,7 @@ repos:
         followup_latency: suppressed_low_n
         commit_scoping: 1.0
     why: >
-      A finished-in-two-days weekend project, dead since 2014-08-26, 5 files. Three of
+      A finished-in-two-days weekend project, long dead, 5 files. Three of
       five facts are suppressed by the min-n floors before any model runs. The
       unambiguous floor of the corpus: if the judge reaches a conclusive verdict on
       ownership or verification here, that is a gross overclaim and nothing else.
@@ -283,7 +283,7 @@ repos:
         commit_scoping: 1.0
     why: >
       The harder thin case, and deliberately not a clone of unp. A drive-by contributor:
-      11 commits in two bursts (2016-02, 2016-11) in a repo that has since gone stale.
+      11 commits in two bursts in a repo that has since gone stale.
       `test_accompanies_fix` is 2/2 — a literal 100% that the floor suppresses rather
       than rounds, which is precisely the "100% from n=1" failure the floors exist for.
       Note L1 reports NO confound flag here beyond low_denominator: this row tests the
@@ -314,7 +314,7 @@ repos:
         followup_latency: 2.0
         commit_scoping: 2.0
     why: >
-      1042 commits and 146 fix-keyword commits over 8 years, active to 2026-07-25. Sits
+      1042 commits and 146 fix-keyword commits over 8 years, recently active. Sits
       at 89% authorship — deliberately just UNDER the 0.95 solo threshold, so
       `ownership_loop` is computed rather than suppressed in a repo that is nearly solo.
       See notes.finding_solo_threshold: this near-miss is the single most interesting row
@@ -342,7 +342,7 @@ repos:
         followup_latency: 52.0
         commit_scoping: 1.0
     why: >
-      1211 commits under this address, active to 2026-07-24, in a 233-author repo — rich
+      1211 commits under this address, recently active, in a 233-author repo — rich
       without being solo (44% top-author share). Also the corpus's genuine split-identity
       case: the same human commits under three addresses — the selected one plus two more
       carrying a further 2209 commits, one of which outranks it — confirmed by matching
@@ -365,7 +365,7 @@ repos:
       human_commits: 18908
       distinct_human_authors: 1121
       subject_share: 0.0024
-      window_days: 513          # 16.9 months — 2022-03-15 .. 2023-08-11
+      window_days: 513          # 16.9 months
       squash_marker_share: 0.08
       rebase_skew_share: 0.42
       confounds: [rebase_rewritten_authorship, unresolved_identity_aliases]
@@ -377,8 +377,8 @@ repos:
         followup_latency: suppressed_low_n   # 0 pairs
         commit_scoping: 4.0
     why: >
-      45 commits over 16.9 months — the closest match to the target shape found anywhere in
-      this search, and the reason this axis exists. The subject holds 0.24% of the repo's
+      45 commits — the closest match to the target shape found anywhere in this
+      search, and the reason this axis exists. The subject holds 0.24% of the repo's
       human commits, so nothing about them survives dilution.
       THE ROW'S POINT IS `test_accompanies_fix: 0.0`. It is MEASURED, not suppressed: the
       floor is `MinN.fix_commits = 3` and this person has 5 fix commits, so the rate clears
@@ -406,7 +406,7 @@ repos:
       human_commits: 8989
       distinct_human_authors: 627
       subject_share: 0.0029
-      window_days: 596          # 19.6 months — 2024-02-27 .. 2025-10-15
+      window_days: 596          # 19.6 months
       squash_marker_share: 0.10
       confounds: []             # from detect_confounds ONLY
       confounds_after_extract: [low_denominator]
@@ -417,8 +417,8 @@ repos:
         followup_latency: suppressed_low_n   # 2 pairs, floor is 3
         commit_scoping: 4.0
     why: >
-      The thinner and more recent half of the pair: 26 commits over 19.6 months, active to
-      2025-10, in a different ecosystem and a repo a third of wagtail's size. Deliberately
+      The thinner and more recent half of the pair: 26 commits over 19.6 months, recently
+      active, in a different ecosystem and a repo a third of wagtail's size. Deliberately
       not a clone of the wagtail row — it varies volume, recency and language so
       `target_shape` is not pinned to one project's conventions.
       Where wagtail's damning number survives the floor, this row's FLATTERING one does:
@@ -601,11 +601,27 @@ notes:
     resolver does. What the digest buys is a loud failure: if the ranking shifts under the
     corpus, resolution raises instead of silently profiling a different person. What it
     costs: reading this file no longer tells you who a row is about without a clone.
-    STILL OPEN, and the same leak by another door: `eval/labels.yaml` stores `author:` as a
-    plain address, and the labels are committed. It is empty today, so nothing has leaked
-    yet, but the first label written through the CLI puts an address in history. Either the
-    label schema keys on the corpus `id` or the CLI resolves through this file. A phase 1g
-    decision — do not start labeling before it is made.
+    THE SECOND DOOR IS NOW CLOSED TOO, and this is the record of how. The problem was that
+    `eval/labels.yaml` stored `author:` as a plain address and the labels are committed: the
+    file was empty so nothing had leaked, but the first label written through the CLI would
+    have put an address in history, in the file whose entire purpose is to record judgements
+    about the people it names. Of the two candidates named here, the schema change was taken:
+    a label carries `corpus_id` and nothing else that can identify anyone. `repo`, `author`
+    and `aliases` are GONE FROM THE SCHEMA rather than merely left unset — a field that can
+    hold an address eventually holds one, so the guarantee is the absent field, not the
+    discipline of whoever fills the file in. The CLI resolving through this file was the
+    weaker option: it removes the address from the write path but leaves the field, and the
+    next person to hand-edit a label puts it back. THREE ENFORCEMENTS, not one, because a
+    `reason` is free text a human types and is exactly where an address slips in: (1) the
+    model forbids extra fields; (2) `load_labels` scans the RAW BYTES of the file before
+    parsing and refuses to load if anything email-shaped appears anywhere, including in a
+    comment, which the parser never sees; (3) `vouch label` runs the same validator BEFORE
+    the write, so the mistake costs one retyped line rather than a hand-edit of a
+    half-written file mid-round. Populated label sets are gitignored (`labels.local.yaml`);
+    the tracked `labels.yaml` stays empty as the schema contract and a test keeps it that
+    way. The cost, stated: a label no longer says who it is about, so reading the corpus and
+    the labels together tells you the judgement but not the person, and re-deriving that
+    needs a clone — the same trade this note already accepted for the selector.
 
   subject_consent: >
     docs/plan.md §5 q1 records phase 1 as subject-initiated: a profile is generated by the

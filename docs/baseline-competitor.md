@@ -1,7 +1,7 @@
 # Quality baseline — [competitor]
 
 **Source:** competitor marketing homepage + the "illustrative profile" section it
-renders inline, fetched 2026-07-25.
+renders inline.
 
 **Coverage caveat.** Everything past `/auth/sign-in` is gated, so this is the public surface only:
 the homepage, its illustrative profile, and the linked policy pages (`/terms`, `/privacy`,
