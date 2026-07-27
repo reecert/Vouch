@@ -13,6 +13,7 @@ from vouch.eval import (
     run_eval,
 )
 from vouch.ingest import DEFAULT_CACHE_DIR, ingest, resolve_repo
+from vouch.l1.cache import cached_extract
 from vouch.l1.extract import extract_facts
 from vouch.l2.metrics import derive_metrics
 from vouch.l2.parser import default_log_dir, parse_snapshot
@@ -39,6 +40,11 @@ app = typer.Typer(help="vouch — evidence-backed capability profiles from real 
 _ALIAS = typer.Option(
     [], "--alias", help="Additional address this person commits under. Repeatable."
 )
+_REFRESH = typer.Option(
+    False,
+    "--refresh",
+    help="Recompute L1 instead of reusing the cache keyed on repo + HEAD + extractor version.",
+)
 _HISTORICAL_ROOT = typer.Option(
     [],
     "--historical-root",
@@ -55,6 +61,7 @@ def facts(
     repo_url: str = typer.Argument(..., help="Public git repo URL (or local path)."),
     author: str = typer.Option(..., "--author", help="Author email to evaluate."),
     alias: list[str] = _ALIAS,
+    refresh: bool = _REFRESH,
     out: str | None = typer.Option(None, "--out", help="Write the JSON to this path."),
 ) -> None:
     """Run L1 only: the deterministic facts and confounds. No LLM, no network beyond git.
@@ -64,7 +71,16 @@ def facts(
     """
     repo_path = resolve_repo(repo_url)
     snapshot = ingest(repo_url)
-    result = extract_facts(snapshot, author, repo_path, aliases=list(alias))
+    result, was_cached = cached_extract(
+        repo_url,
+        snapshot.head_sha,
+        author,
+        lambda: extract_facts(snapshot, author, repo_path, aliases=list(alias)),
+        aliases=list(alias),
+        refresh=refresh,
+    )
+    if was_cached:
+        typer.echo("(from the L1 cache; pass --refresh to recompute)", err=True)
 
     if result.n_commits_by_subject == 0:
         typer.echo(f"warning: no commits by {author} in {repo_url}", err=True)
@@ -115,7 +131,13 @@ def profile(
     """
     repo_path = resolve_repo(repo_url)
     snapshot = ingest(repo_url)
-    facts_result = extract_facts(snapshot, author, repo_path, aliases=list(alias))
+    facts_result, _ = cached_extract(
+        repo_url,
+        snapshot.head_sha,
+        author,
+        lambda: extract_facts(snapshot, author, repo_path, aliases=list(alias)),
+        aliases=list(alias),
+    )
 
     identity = resolve_identity(
         repo_path,

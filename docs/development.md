@@ -15,14 +15,26 @@ The **entire** suite runs offline — no network, no LLM providers installed.
 pytest -q
 ```
 
-- **`tests/test_ingest.py`** — git parsing, caching, revert-body parsing, blame.
-- **`tests/test_extract.py`** — every signal, with a positive and a discriminating
-  negative case, plus the `commit_index`-only-cites invariant.
-- **`tests/test_judge.py`** — structured-output + grounding retries, provider fallback,
-  driven by a scripted `StubProvider` (no real LLM).
-- **`tests/test_report.py`** — report assembly, JSON round-trip, markdown rendering.
-- **`tests/test_cli.py`** — CLI wiring via `typer`'s `CliRunner`; the judge is
-  monkeypatched, and `--evidence-only` exercises the deterministic path with no patching.
+Tests are named for the layer they cover.
+
+- **`test_ingest.py`** — git parsing, snapshot caching, revert-body parsing, blame.
+- **`test_l1_*.py`** — facts, confound detection, identity/mailmap resolution, path
+  classification, evidence strength, scoping. Each fact gets a positive and a
+  discriminating negative case. `test_l1_golden.py` pins byte-identical output over eight
+  fixture repos; `test_l1_cache.py` covers the persistence cache, including that every
+  input which changes the facts also changes the key.
+- **`test_l2_*.py`** — the JSONL parser (including mutated and non-session logs), derived
+  metrics, and the payload-closure test that walks the *schema* and fails on any free-text
+  field.
+- **`test_l3_*.py`** — the session↔commit join, its measured precision/recall harness, and
+  repo identity.
+- **`test_l4_*.py`** — structured-output and grounding retries, the support check and the
+  adversarial mock modes, driven by scripted providers (no real LLM).
+- **`test_l5_profile.py`** — profile assembly and the frozen snapshot.
+- **`test_eval*.py`, `test_labeling.py`** — the eval harness, the corpus and its
+  address-free selectors, and the blind labelling procedure (§ *Labelling the corpus*).
+- **`test_cli.py`** — CLI wiring via `typer`'s `CliRunner`; the judge is monkeypatched, and
+  `facts` exercises the deterministic path with no patching.
 
 ### Fixtures
 
@@ -34,10 +46,22 @@ key off. This exercises real `git` behavior without touching the network.
 from tests.fixtures.builder import ALICE, Step, build_repo
 
 shas = build_repo(tmp_path / "r", [
-    Step(ALICE, "2024-01-01T10:00:00", "add", {"a.py": "1\n"}),
-    Step(ALICE, "2024-02-10T10:00:00", "fix a", {"a.py": "2\n"}),
+    Step(ALICE, "T1", "add", {"a.py": "1\n"}),
+    Step(ALICE, "T2", "fix a", {"a.py": "2\n"}),
 ])
 ```
+
+## The L1 cache
+
+L1 is expensive (a `git blame` per changed line of every fix commit) and pure, so its
+output is cached under `.vouch_cache/l1/`, keyed on repo, pinned HEAD, subject identity,
+`EXTRACTOR_VERSION` and the config fingerprint. This is what makes a labelling round
+something you can stop and come back to.
+
+**Bump `EXTRACTOR_VERSION` in `vouch/l1/cache.py` whenever the computation changes** — a
+new predicate, a changed blame rule, a different interval. `SCHEMA_VERSION` describes the
+output's *shape*; a fix that changes what `ownership_loop` counts leaves the shape
+identical and every cached value wrong. Pass `--refresh` to recompute one run.
 
 ## Linting
 
