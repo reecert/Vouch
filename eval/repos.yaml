@@ -1,13 +1,14 @@
-# The calibration corpus: ten real public repos, one target author each.
+# The calibration corpus: twelve real public repos, one target author each.
 #
-# Selected 2026-07-26 for phase 1f. Every claim below about a repo's shape was MEASURED by
-# running `vouch.l1.confounds.compute_stats` + `detect_confounds` — the same code the
-# pipeline uses — against a real clone, not asserted from memory. The `measured:` block on
-# each entry is that output, and `head:` pins the commit it was measured at.
+# Selected 2026-07-26 for phase 1f; rows 11-12 added 2026-07-27. Every claim below about a
+# repo's shape was MEASURED by running `vouch.l1.confounds.compute_stats` +
+# `detect_confounds` — the same code the pipeline uses — against a real clone, not asserted
+# from memory. The `measured:` block on each entry is that output, and `head:` pins the
+# commit it was measured at.
 #
-# Why these ten. The corpus has to contain each way a real history lies to the extractor,
+# Why these twelve. The corpus has to contain each way a real history lies to the extractor,
 # because a corpus of well-behaved repos would only teach us that the judge works on
-# well-behaved repos. Five axes, two repos each:
+# well-behaved repos. Six axes, two repos each:
 #
 #   solo         ownership is structurally meaningless — nobody else wrote the code, so
 #                "fixes their own bugs" is the only option available. L1 suppresses
@@ -22,8 +23,17 @@
 #   rich         long, active, high-volume histories where a conclusive verdict is
 #                legitimately available — the control for the thin rows. Without these the
 #                corpus would only reward declining.
+#   target_shape THE ACTUAL USER. Every other row is an elite maintainer — 200-1200 subject
+#                commits over a decade. The product's real subject is an early-career
+#                engineer: a few dozen commits, an ~18-month window, a fix history you can
+#                count on one hand. Nothing above measures that, so the corpus could not
+#                say what the pipeline returns to the person it is FOR. Distinct from
+#                `thin`, which is stale-and-abandoned (unp died 2014, records 2016): these
+#                two histories are small because the career is young, not because the
+#                project stopped. Both sit in large, actively-maintained, non-squash repos
+#                so the axis is not confounded with `solo` or `squash`.
 #
-# The axes are a SAMPLING STRATEGY, NOT A PARTITION. Three repos fire
+# The axes are a SAMPLING STRATEGY, NOT A PARTITION. Four repos fire
 # `unresolved_identity_aliases` incidentally; `records` and `flask` fire nothing at all.
 # The `measured:` block is the truth; `axis:` only records why the repo was reached for.
 #
@@ -340,6 +350,88 @@ repos:
       consequence for the selector: rank 2 is this person's *largest* address, not their
       whole output, which is exactly the understatement the confound flags.
 
+  # ---- target_shape: the early-career engineer the product is actually for -----------
+  - id: wagtail-contrib
+    axis: target_shape
+    repo: https://github.com/wagtail/wagtail.git
+    author:
+      by: commit_rank
+      rank: 31         # of 1121 non-bot authors at head
+      email_sha256: "b3c0c5067aad"
+    aliases: []
+    head: c10e634636
+    measured:
+      subject_commits: 45
+      human_commits: 18908
+      distinct_human_authors: 1121
+      subject_share: 0.0024
+      window_days: 513          # 16.9 months — 2022-03-15 .. 2023-08-11
+      squash_marker_share: 0.08
+      rebase_skew_share: 0.42
+      confounds: [rebase_rewritten_authorship, unresolved_identity_aliases]
+      confounds_after_extract: [low_denominator]
+      facts_surviving:
+        ownership_loop: suppressed_low_n     # 0/0 — no fix reaches the denominator at all
+        revert_rate: 0.0                     # 0/45
+        test_accompanies_fix: 0.0            # 0/5 — MEASURED, not suppressed. See below.
+        followup_latency: suppressed_low_n   # 0 pairs
+        commit_scoping: 4.0
+    why: >
+      45 commits over 16.9 months — the closest match to the target shape found anywhere in
+      this search, and the reason this axis exists. The subject holds 0.24% of the repo's
+      human commits, so nothing about them survives dilution.
+      THE ROW'S POINT IS `test_accompanies_fix: 0.0`. It is MEASURED, not suppressed: the
+      floor is `MinN.fix_commits = 3` and this person has 5 fix commits, so the rate clears
+      it and publishes. A screener reads "0% of fixes ship with a test" about an
+      early-career candidate, computed from FIVE commits. Every guard the pipeline has
+      fired correctly and the number still got out — the floors protect against n=1, not
+      against n=5. This is the corpus's sharpest UNDERclaim trap, and the exact mirror of
+      httpx's overclaim trap: there a flattering number survives a WARN, here a damning one
+      survives a floor.
+      Also the first row to exercise `rebase_rewritten_authorship` (42% of commits carry a
+      committer/author date gap over the 30% threshold) — one of the four detectors
+      notes.confounds_not_covered listed as unexercised.
+
+  - id: mitmproxy-contrib
+    axis: target_shape
+    repo: https://github.com/mitmproxy/mitmproxy.git
+    author:
+      by: commit_rank
+      rank: 22         # of 627 non-bot authors at head
+      email_sha256: "ec1d9b71bce3"
+    aliases: []
+    head: a4b234a3e1
+    measured:
+      subject_commits: 26
+      human_commits: 8989
+      distinct_human_authors: 627
+      subject_share: 0.0029
+      window_days: 596          # 19.6 months — 2024-02-27 .. 2025-10-15
+      squash_marker_share: 0.10
+      confounds: []             # from detect_confounds ONLY
+      confounds_after_extract: [low_denominator]
+      facts_surviving:
+        ownership_loop: suppressed_low_n     # 1/1 — a real self-fix loop the floor refuses
+        revert_rate: 0.0385                  # 1/26
+        test_accompanies_fix: 0.5            # 2/4 — MEASURED off a denominator of four
+        followup_latency: suppressed_low_n   # 2 pairs, floor is 3
+        commit_scoping: 4.0
+    why: >
+      The thinner and more recent half of the pair: 26 commits over 19.6 months, active to
+      2025-10, in a different ecosystem and a repo a third of wagtail's size. Deliberately
+      not a clone of the wagtail row — it varies volume, recency and language so
+      `target_shape` is not pinned to one project's conventions.
+      Where wagtail's damning number survives the floor, this row's FLATTERING one does:
+      `test_accompanies_fix: 0.5` off 2/4. And `ownership_loop` is suppressed at 1/1 — the
+      subject genuinely did fix their own bug with a test, the single most probative thing
+      in the whole corpus about this person, and the floor correctly refuses to turn one
+      instance into a rate. The row therefore holds both halves of the honest trade in one
+      history: the fact worth reporting is suppressed, and the fact not worth reporting is
+      published.
+      The cleanest row in the corpus by confound count — `detect_confounds` returns an
+      empty list, and `low_denominator` is the only flag the extractor raises. Whatever a
+      judge concludes here, thinness is the only thing it can be concluding from.
+
 # ---------------------------------------------------------------------------------------
 notes:
   aliases: >
@@ -434,12 +526,58 @@ notes:
     is a genuine finding about the fact's resolution and should be recorded as one. The
     prediction is here to make that outcome falsifiable, not to pre-empt it.
 
+  prediction_target_shape: >
+    A PREDICTION, WRITTEN DOWN BEFORE `extract_facts` WAS RUN on either target_shape row
+    and scored here unedited, because a prediction recorded after the fact is worthless.
+    PREDICTED: both rows come back insufficient across most dimensions — specifically that
+    `ownership_loop`, `test_accompanies_fix` and `followup_latency` would all be
+    suppressed_low_n on both rows, `revert_rate` and `commit_scoping` would be measured,
+    `revert_rate` would be 0.0 on both, and `low_denominator` would fire on both.
+    OUTCOME: RIGHT ON FOUR OF SIX, AND WRONG ON THE ONE THAT MATTERED.
+    Correct: `ownership_loop` suppressed on both (0/0 and 1/1), `followup_latency`
+    suppressed on both (0 and 2 pairs, floor 3), `commit_scoping` measured on both,
+    `low_denominator` fires on both.
+    Wrong, and this is the finding: `test_accompanies_fix` is MEASURED on BOTH rows — 0.0
+    from 0/5 on wagtail, 0.5 from 2/4 on mitmproxy. `MinN.fix_commits` is 3, and a
+    target-shape engineer has four or five fix commits, so the rate clears the floor and
+    publishes. The floors were built against the "100% from n=1" failure (docs/plan.md
+    §1.2e) and they stop exactly that; they do not stop 0% from n=5.
+    Also wrong in the same direction: `revert_rate` is 0.0385 on mitmproxy, not 0.0 — one
+    revert out of 26 commits reads as a 3.9% revert rate.
+    WHAT THIS IS. A PRODUCT FINDING, NOT A BUG — every component behaved as specified.
+    Verification discipline is the dimension docs/plan.md §5 q2 says should LEAD the
+    report, because it is the one spanning L1 and L2 where corroboration is visible. For
+    the product's actual user it will lead with a hard percentage resting on four or five
+    commits, and for wagtail that percentage is zero. The failure mode the quality bar was
+    written against is the flattering conclusion from weak data; this is its mirror, and
+    nothing in the codebase currently treats it as the same class of error.
+    DO NOT RETUNE `MinN.fix_commits` ON THIS EVIDENCE. Two rows are not a basis for a
+    threshold, and raising it to 6 would suppress mitmproxy's genuine 1/1 self-fix loop
+    along with the noise. The labels are the evidence for what the floor should be — the
+    same discipline notes.finding_solo_threshold applies to `solo_authorship_share`.
+
+  finding_commit_scoping_gains_a_fourth_value: >
+    MEASURED, NOT ACTED ON. notes.finding_commit_scoping_resolution recorded that
+    `commit_scoping` took three values across ten rows (1.0 on five, 2.0 on four, 2.5 on
+    one) and warned that a fact that coarse cannot discriminate. Both target_shape rows
+    measure 4.0 — a fourth value, and the highest in the corpus, on the two rows with the
+    FEWEST commits. That is worth stating plainly because it runs against the intuition
+    the axis was added on: these two are not thin because their commits are small, they
+    are thin because there are few of them, and each one touches more files than an elite
+    maintainer's median commit does. It does not rescue the fact's resolution — 12 rows
+    over four values is still coarse — and it does not weaken
+    prediction_scope_control_agreement, which remains the number to distrust. It does mean
+    the corpus is no longer 50% clustered on a single value.
+
   confounds_not_covered: >
-    The five requested axes leave four of L1's nine detectors unexercised:
-    `bot_dominated`, `vendored_or_generated_bulk`, `rebase_rewritten_authorship` and
-    `shallow_history`. Nothing in this corpus licenses a claim about the judge's behaviour
-    when those fire. Candidates seen while probing, if a later pass wants them:
-    simonw/til (27% bot commits) and psf/black (9%).
+    The five original axes left four of L1's nine detectors unexercised. Adding the
+    target_shape rows closed one of them: `wagtail-contrib` fires
+    `rebase_rewritten_authorship` (42% of commits carry a committer/author date gap past
+    the 30% threshold), incidentally rather than by design. THREE REMAIN UNEXERCISED:
+    `bot_dominated`, `vendored_or_generated_bulk` and `shallow_history`. Nothing in this
+    corpus licenses a claim about the judge's behaviour when those fire. Candidates seen
+    while probing, if a later pass wants them: simonw/til (27% bot commits) and psf/black
+    (9%).
 
   cost: >
     Full `extract_facts` is dominated by blame. Measured on these clones, all ten rows:

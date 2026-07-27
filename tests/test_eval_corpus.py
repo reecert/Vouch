@@ -167,5 +167,19 @@ def test_the_committed_corpus_contains_no_address() -> None:
 
 def test_every_committed_row_is_loadable() -> None:
     corpus = load_corpus(CORPUS_PATH)
-    assert len(corpus.repos) == 10
+    assert len(corpus.repos) == 12
     assert all(spec.author.by == "commit_rank" for spec in corpus.repos)
+
+
+def test_the_target_shape_axis_is_present_and_paired() -> None:
+    """The axis the product's actual user falls in — see the header block in the YAML.
+
+    Asserted because it is the one axis whose absence would be invisible: every other row
+    is an elite maintainer, and a corpus of only those looks complete right up until
+    someone asks what the pipeline returns to a junior engineer.
+    """
+    corpus = load_corpus(CORPUS_PATH)
+    rows = [spec for spec in corpus.repos if spec.axis == "target_shape"]
+    assert len(rows) == 2
+    # Thin by construction: both sit far below the ~200-commit floor of every other row.
+    assert all(spec.measured["subject_commits"] <= 50 for spec in rows)
