@@ -32,5 +32,22 @@
 # Kept empty deliberately. The harness's empty-holdout refusal is the tested default
 # state, and until this file has real labels in it, NOTHING in this repository licenses a
 # claim about the judge's accuracy.
+#
+# `metadata` names the code a label was made against. A calibration result that cannot
+# name the code it measured is not a result. `code_sha` below is the BASELINE — the state
+# of main at which this corpus is to be labelled — and it is a declaration, not a
+# measurement: the commit that writes it is necessarily the one after it.
+#
+# The stamp that matters is not this one. `vouch label` writes the real provenance into
+# `labels.local.yaml` at the first write of a round, and `load_labels` refuses any file
+# that carries labels without it, so an unattributable label set cannot be loaded at all.
+# `extractor_version` and `l1_config` are the two that decide whether existing labels still
+# APPLY: both change the numbers rendered to the labeller, so bumping either mid-round is
+# refused rather than warned about.
+metadata:
+  code_sha: 54d3a97704af72c7ac82bdd4c1152d4acbcf6023
+  dirty: false
+  extractor_version: l1-extract/2
+  l1_config: ""       # stamped per round from L1Config.fingerprint(); no round has run
 train: []
 holdout: []
