@@ -92,7 +92,7 @@
     },
     {
       "dimension": "planning_discipline",
-      "verdict": "not_assessed",
+      "verdict": "not_collected",
       "confidence": "low",
       "summary": "Not assessed: this dimension is read from local session telemetry, which was not collected for this profile.",
       "claims": [],

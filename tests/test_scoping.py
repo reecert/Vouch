@@ -68,7 +68,7 @@ def test_machine_wide_telemetry_is_refused_not_discounted() -> None:
     assert availability.usable_metrics == ()
     assert availability.l2_out_of_scope is True
     assert availability.has_any is False
-    assert availability.is_not_assessable is True
+    assert availability.forces_out_of_scope is True
 
 
 def test_repo_scoped_telemetry_is_admitted() -> None:
@@ -79,14 +79,14 @@ def test_repo_scoped_telemetry_is_admitted() -> None:
     )
 
     assert availability.usable_metrics == (MetricKey.PLAN_BEFORE_EXECUTE,)
-    assert availability.is_not_assessable is False
+    assert availability.forces_out_of_scope is False
 
 
-def test_planning_discipline_is_not_assessable_on_machine_wide_input() -> None:
-    """`not_assessable`, and specifically not `insufficient_evidence`.
+def test_planning_discipline_forces_out_of_scope_on_machine_wide_input() -> None:
+    """`out_of_scope`, and specifically not `insufficient_evidence`.
 
     The distinction is the reader's next action. `insufficient_evidence` says "there wasn't
-    much here"; `not_assessable` says "what is here cannot answer this question" — more
+    much here"; `out_of_scope` says "what is here cannot answer this question" — more
     sessions of the same kind would not help, only sessions from this repo would.
     """
     machine = SessionMetrics(scope=MetricScope.MACHINE, n_sessions=40, rates=_rates())
@@ -103,9 +103,9 @@ def test_planning_discipline_is_not_assessable_on_machine_wide_input() -> None:
 
     checked, note = apply_support_check(claimed, availability)
 
-    assert checked.verdict is Verdict.NOT_ASSESSABLE
+    assert checked.verdict is Verdict.OUT_OF_SCOPE
     assert checked.confidence is Confidence.LOW
-    assert note is not None and "not_assessable" in note
+    assert note is not None and "out_of_scope" in note
 
 
 def test_a_dimension_with_its_own_repo_evidence_survives_out_of_scope_telemetry() -> None:
@@ -128,7 +128,7 @@ def test_a_dimension_with_its_own_repo_evidence_survives_out_of_scope_telemetry(
     assert availability.usable_metrics == ()
     assert availability.l2_out_of_scope is True
     assert availability.has_any is True  # the commit judgments are repo-scoped by nature
-    assert availability.is_not_assessable is False
+    assert availability.forces_out_of_scope is False
 
 
 # --- deriving a scoped population --------------------------------------------------------
@@ -204,7 +204,7 @@ def test_the_excluded_population_stays_visible(two_projects) -> None:
     assert metrics.n_records == sum(s.n_records for s in scoped)
 
 
-def test_scoping_under_the_floor_yields_not_assessable_rather_than_a_number(
+def test_scoping_under_the_floor_yields_out_of_scope_rather_than_a_number(
     two_projects,
 ) -> None:
     """The correct answer, and the one the brief asks for.
@@ -230,4 +230,4 @@ def test_scoping_under_the_floor_yields_not_assessable_rather_than_a_number(
     )
     assert availability.has_any is False
     assert availability.l2_narrowed_by_scope is True
-    assert availability.is_not_assessable is True
+    assert availability.forces_out_of_scope is True

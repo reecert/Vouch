@@ -42,7 +42,7 @@ MIN_LABELS_FOR_EVIDENCE = 15
 MIN_LABELS_FOR_CALIBRATION = 30
 
 #: The conclusive verdicts are ordinal, so "adjacent" is meaningful and a disagreement has a
-#: direction. `not_assessed` and `contradicted` are categorical — exact match or nothing.
+#: direction. `not_collected` and `contradicted` are categorical — exact match or nothing.
 BAND_ORDER: dict[Verdict, int] = {
     Verdict.INSUFFICIENT_EVIDENCE: 0,
     Verdict.LIMITED: 1,
@@ -124,7 +124,7 @@ def _compare(expected: Verdict, predicted: Verdict) -> tuple[bool, bool, str | N
     exp_band = BAND_ORDER.get(expected)
     pred_band = BAND_ORDER.get(predicted)
     if exp_band is None or pred_band is None:
-        # One side is categorical (not_assessed / contradicted): no meaningful distance.
+        # One side is categorical (not_collected / contradicted): no meaningful distance.
         return False, False, None
 
     delta = pred_band - exp_band

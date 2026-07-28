@@ -143,7 +143,7 @@ def profile(
     """Run the full pipeline: facts -> corroboration -> diff-level judgment -> profile.
 
     Emits the shareable profile document. Dimensions that depend on session telemetry
-    report ``not_assessed`` when it is absent, rather than being guessed at.
+    report ``not_collected`` when it is absent, rather than being guessed at.
     """
     repo_path = resolve_repo(repo_url)
     snapshot = ingest(repo_url)
@@ -169,11 +169,11 @@ def profile(
         if metrics.scope is not MetricScope.REPO:
             # Loud, and not silently downgraded: a machine-wide payload is a fine thing to
             # hold, it just cannot describe work in this repo. The dimensions that depend
-            # on it will report `not_assessable` rather than borrowing another project's
+            # on it will report `out_of_scope` rather than borrowing another project's
             # behaviour. Pass --log-dir to derive the repo-scoped version instead.
             typer.echo(
                 f"warning: {sessions_file} was measured at {metrics.scope.value} scope; "
-                "dimensions needing repo-scoped telemetry will be not_assessable",
+                "dimensions needing repo-scoped telemetry will be out_of_scope",
                 err=True,
             )
 

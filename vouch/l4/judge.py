@@ -9,7 +9,7 @@ enforce them about itself:
 * **Support.** A conclusive verdict must rest on something. The check can only ever
   *downgrade* — it is a brake, never an accelerator — so a bug here can make the profile
   more cautious but never more flattering.
-* **Availability.** A dimension whose input layer was absent is `not_assessed` before the
+* **Availability.** A dimension whose input layer was absent is `not_collected` before the
   model is consulted at all, and the model is not given the chance to invent a reading of
   data that does not exist.
 
@@ -157,20 +157,20 @@ def apply_support_check(
 
     Four ways a conclusive verdict fails to stand:
 
-    * the input layer was absent — `not_assessed`;
-    * the only input was measured at the wrong scope — `not_assessable`;
+    * the input layer was absent — `not_collected`;
+    * the only input was measured at the wrong scope — `out_of_scope`;
     * nothing measurable survived suppression — `insufficient_evidence`;
     * the model asserted something but sourced none of it — `insufficient_evidence`.
     """
     spec = availability.spec
 
-    if availability.is_not_assessable:
-        if finding.verdict is Verdict.NOT_ASSESSABLE:
+    if availability.forces_out_of_scope:
+        if finding.verdict is Verdict.OUT_OF_SCOPE:
             return finding, None
         return (
             finding.model_copy(
                 update={
-                    "verdict": Verdict.NOT_ASSESSABLE,
+                    "verdict": Verdict.OUT_OF_SCOPE,
                     "confidence": Confidence.LOW,
                     "limitations": [
                         *finding.limitations,
@@ -179,17 +179,17 @@ def apply_support_check(
                     ],
                 }
             ),
-            f"{spec.key.value}: {finding.verdict.value} -> not_assessable "
+            f"{spec.key.value}: {finding.verdict.value} -> out_of_scope "
             f"(evidence measured at {spec.scope.value} scope was unavailable)",
         )
 
     if not availability.was_looked_at:
-        if finding.verdict is Verdict.NOT_ASSESSED:
+        if finding.verdict is Verdict.NOT_COLLECTED:
             return finding, None
         return (
             finding.model_copy(
                 update={
-                    "verdict": Verdict.NOT_ASSESSED,
+                    "verdict": Verdict.NOT_COLLECTED,
                     "confidence": Confidence.LOW,
                     "limitations": [
                         *finding.limitations,
@@ -197,7 +197,7 @@ def apply_support_check(
                     ],
                 }
             ),
-            f"{spec.key.value}: {finding.verdict.value} -> not_assessed (input layer absent)",
+            f"{spec.key.value}: {finding.verdict.value} -> not_collected (input layer absent)",
         )
 
     if finding.verdict not in CONCLUSIVE_VERDICTS:
@@ -260,11 +260,11 @@ def judge_profile(
     for spec in DIMENSIONS:
         availability = assess_availability(spec, facts, metrics, len(judgments))
 
-        if availability.is_not_assessable:
+        if availability.forces_out_of_scope:
             findings.append(
                 DimensionFinding(
                     dimension=spec.key,
-                    verdict=Verdict.NOT_ASSESSABLE,
+                    verdict=Verdict.OUT_OF_SCOPE,
                     confidence=Confidence.LOW,
                     summary=(
                         "Not assessable: the session telemetry supplied was measured "
@@ -283,7 +283,7 @@ def judge_profile(
             findings.append(
                 DimensionFinding(
                     dimension=spec.key,
-                    verdict=Verdict.NOT_ASSESSED,
+                    verdict=Verdict.NOT_COLLECTED,
                     confidence=Confidence.LOW,
                     summary=(
                         "Not assessed: this dimension is read from local session "

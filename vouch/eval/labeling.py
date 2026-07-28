@@ -84,7 +84,7 @@ SPLIT_HOLDOUT_SHARE = 1 / 3
 #: before the labeller sees the row — so they are forced when they apply and absent when
 #: they do not, never sitting on the menu as a third kind of thing to pick.
 JUDGEABLE_VERDICTS: tuple[Verdict, ...] = tuple(
-    v for v in Verdict if v not in (Verdict.NOT_ASSESSED, Verdict.NOT_ASSESSABLE)
+    v for v in Verdict if v not in (Verdict.NOT_COLLECTED, Verdict.OUT_OF_SCOPE)
 )
 
 
@@ -254,15 +254,15 @@ def build_task(
     # been the model's own diff reading is, to a labeller, unassessable.
     availability = assess_availability(spec, facts, metrics, n_commit_judgments=0)
     permitted, forced_reason = JUDGEABLE_VERDICTS, ""
-    if availability.is_not_assessable:
-        permitted = (Verdict.NOT_ASSESSABLE,)
+    if availability.forces_out_of_scope:
+        permitted = (Verdict.OUT_OF_SCOPE,)
         forced_reason = (
             "The only telemetry that could answer this was measured over a different "
             "population than this dimension claims, so it cannot describe work here. "
             "More evidence of the same kind would not help."
         )
     elif not availability.was_looked_at:
-        permitted = (Verdict.NOT_ASSESSED,)
+        permitted = (Verdict.NOT_COLLECTED,)
         forced_reason = (
             f"This dimension reads only from session telemetry "
             f"({', '.join(k.value for k in spec.l2_metrics)}), and none was collected for "

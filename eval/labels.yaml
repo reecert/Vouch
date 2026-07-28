@@ -8,7 +8,7 @@
 #   corpus_id: a row id from eval/repos.yaml. THE ONLY IDENTIFIER.
 #   dimension: ownership | verification_discipline | planning_discipline | scope_control
 #   verdict:   strong | moderate | limited | insufficient_evidence
-#              | not_assessed | not_assessable | contradicted
+#              | not_collected | out_of_scope | contradicted
 #   reason:    REQUIRED, one line, falsifiable. Point at behaviour in the history that a
 #              sceptic could check. "vibes" is not a reason and loading will fail.
 #

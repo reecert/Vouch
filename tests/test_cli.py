@@ -244,13 +244,13 @@ def test_label_refuses_a_judged_verdict_where_nothing_was_looked_at(tmp_path: Pa
             "insufficient_evidence\nthin on every count\n"
             "insufficient_evidence\nthin on every count\n"
             "moderate\n"
-            "not_assessed\nno session log exists for this repository\n"
+            "not_collected\nno session log exists for this repository\n"
         ),
     )
 
     assert result.exit_code == 0, result.output
     assert "CANNOT BE JUDGED HERE" in result.output
-    assert "expected one of not_assessed" in result.output
+    assert "expected one of not_collected" in result.output
     assert "4 label(s) written" in result.output
 
 

@@ -326,7 +326,7 @@ class Verdict(str, Enum):
     moderate = "moderate"
     limited = "limited"
     insufficient_evidence = "insufficient_evidence"   # first-class, frequent
-    not_assessed = "not_assessed"                     # we didn't look — distinct from the above
+    not_collected = "not_collected"                   # we didn't look — distinct from the above
     contradicted = "contradicted"                     # evidence points the other way
 
 class Claim(BaseModel):
@@ -423,7 +423,7 @@ Decide before the phase that needs it:
    Verification discipline is the one that spans both layers, so it is where corroboration is
    visible to a reader — the same behaviour observed in the commit trail *and* in the session
    trail. That makes it the dimension that best demonstrates the differentiator, and it should
-   lead the report. Planning discipline rests on L2 alone, so it is `not_assessed` whenever the
+   lead the report. Planning discipline rests on L2 alone, so it is `not_collected` whenever the
    CLI was not run — stated per-dimension, following the competitor's good habit of scoping
    coverage claims per section rather than in one global disclaimer.
 

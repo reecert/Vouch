@@ -176,9 +176,9 @@ class TestScoring:
         assert far.metrics.adjacent_agreement == 0.0
 
     def test_categorical_verdicts_have_no_direction(self) -> None:
-        """`not_assessed` is not on the ordinal scale, so a mismatch has no direction."""
+        """`not_collected` is not on the ordinal scale, so a mismatch has no direction."""
         labels = LabelSet(holdout=[label(Verdict.STRONG)])
-        report = run_eval(labels, lambda _l: finding(Verdict.NOT_ASSESSED), split="holdout")
+        report = run_eval(labels, lambda _l: finding(Verdict.NOT_COLLECTED), split="holdout")
 
         assert report.results[0].direction is None
         assert report.metrics.n_overclaim == 0

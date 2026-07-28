@@ -52,19 +52,19 @@ def test_verdict_vocabulary_is_closed_and_includes_the_declines() -> None:
         "moderate",
         "limited",
         "insufficient_evidence",
-        "not_assessed",
-        "not_assessable",
+        "not_collected",
+        "out_of_scope",
         "contradicted",
     }
 
 
 def test_the_three_declines_are_distinct_values() -> None:
     """Collapsing them into one "unknown" would lose the distinction a reader needs."""
-    assert Verdict.INSUFFICIENT_EVIDENCE != Verdict.NOT_ASSESSED
-    assert Verdict.NOT_ASSESSED != Verdict.CONTRADICTED
+    assert Verdict.INSUFFICIENT_EVIDENCE != Verdict.NOT_COLLECTED
+    assert Verdict.NOT_COLLECTED != Verdict.CONTRADICTED
     assert not CONCLUSIVE_VERDICTS & {
         Verdict.INSUFFICIENT_EVIDENCE,
-        Verdict.NOT_ASSESSED,
+        Verdict.NOT_COLLECTED,
         Verdict.CONTRADICTED,
         Verdict.LIMITED,
     }

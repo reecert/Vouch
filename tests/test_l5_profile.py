@@ -202,7 +202,7 @@ class TestRisksToProbe:
         planning = profile.findings and next(
             f for f in profile.findings if f.dimension is DimensionKey.PLANNING_DISCIPLINE
         )
-        assert planning.verdict is Verdict.NOT_ASSESSED
+        assert planning.verdict is Verdict.NOT_COLLECTED
         assert any("Planning discipline could not be assessed" in r
                    for r in profile.risks_to_probe)
 

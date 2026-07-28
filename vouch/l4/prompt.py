@@ -25,9 +25,10 @@ from vouch.l4.schema import CommitJudgment
 __all__ = ["PROMPT_VERSION", "commit_system", "commit_user", "dimension_system",
            "dimension_user"]
 
-# Bumped when facts started being presented as intervals rather than point estimates.
-# Any calibration measured against `/1` was measured against a different question.
-PROMPT_VERSION = "l4-diff/2"
+# Bumped at /2 when facts started being presented as intervals rather than point estimates,
+# and at /3 when two verdict names changed. Any calibration measured against an earlier
+# version was measured against a different question.
+PROMPT_VERSION = "l4-diff/3"
 
 
 def commit_system() -> str:
@@ -165,7 +166,7 @@ Verdicts:
 - strong / moderate / limited — the evidence supports a reading of this behaviour.
 - insufficient_evidence — you looked and there is not enough to say. Use this freely.
   Thin evidence must stay insufficient rather than become a flattering conclusion.
-- not_assessed — the input this dimension needs was absent entirely.
+- not_collected — the input this dimension needs was never gathered.
 - contradicted — the evidence points against the behaviour.
 
 Rules that are checked mechanically after you answer:

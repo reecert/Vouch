@@ -11,7 +11,8 @@ export type Verdict =
   | "moderate"
   | "limited"
   | "insufficient_evidence"
-  | "not_assessed"
+  | "not_collected"
+  | "out_of_scope"
   | "contradicted";
 
 export type Confidence = "high" | "moderate" | "low";
@@ -117,7 +118,8 @@ export const VERDICT_LABELS: Record<Verdict, string> = {
   moderate: "Moderate",
   limited: "Limited",
   insufficient_evidence: "Insufficient evidence",
-  not_assessed: "Not assessed",
+  not_collected: "Not collected",
+  out_of_scope: "Out of scope",
   contradicted: "Contradicted",
 };
 
@@ -135,7 +137,9 @@ export const VERDICT_STYLES: Record<Verdict, string> = {
     "bg-amber-50 text-amber-900 ring-amber-600/20 dark:bg-amber-950 dark:text-amber-100 dark:ring-amber-400/20",
   insufficient_evidence:
     "bg-slate-100 text-slate-700 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-400/20",
-  not_assessed:
+  not_collected:
+    "bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-400/20",
+  out_of_scope:
     "bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-400/20",
   contradicted:
     "bg-rose-50 text-rose-900 ring-rose-600/20 dark:bg-rose-950 dark:text-rose-100 dark:ring-rose-400/20",

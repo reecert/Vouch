@@ -9,7 +9,7 @@ in the commit trail (`test_accompanies_fix`) and in the session trail
 (`test_or_build_after_edit`). It is where corroboration is visible to a reader, so it leads
 the report.
 
-`PLANNING_DISCIPLINE` rests on L2 alone. When the CLI was not run it is `not_assessed`,
+`PLANNING_DISCIPLINE` rests on L2 alone. When the CLI was not run it is `not_collected`,
 not `insufficient_evidence` — we did not look, rather than looked and found little. That
 distinction is stated per dimension rather than in one global disclaimer.
 """
@@ -111,18 +111,18 @@ class EvidenceAvailability:
 
     @property
     def was_looked_at(self) -> bool:
-        """False means the input layer was absent — `not_assessed`, not `insufficient`."""
+        """False means the input layer was absent — `not_collected`, not `insufficient`."""
         if self.spec.l1_facts or self.spec.uses_commit_judgments:
             return True
         return self.l2_present
 
     @property
-    def is_not_assessable(self) -> bool:
+    def forces_out_of_scope(self) -> bool:
         """True when scoping, not scarcity, is what leaves this dimension with nothing.
 
-        The honest verdict here is `not_assessable`, not `insufficient_evidence`, and the
+        The honest verdict here is `out_of_scope`, not `insufficient_evidence`, and the
         difference is what it tells the reader to do. `insufficient_evidence` says there
-        was little to read. `not_assessable` says the question cannot be answered from what
+        was little to read. `out_of_scope` says the question cannot be answered from what
         exists: either the telemetry describes the wrong population, or it described the
         right one and this repo simply is not where this person's sessions happened. More
         data of the same kind would not move either.

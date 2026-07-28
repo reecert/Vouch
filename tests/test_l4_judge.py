@@ -221,7 +221,7 @@ class TestSupportCheck:
         assert checked.verdict is Verdict.INSUFFICIENT_EVIDENCE
         assert note is None
 
-    def test_absent_input_layer_becomes_not_assessed(self, repo_facts) -> None:
+    def test_absent_input_layer_becomes_not_collected(self, repo_facts) -> None:
         """"We didn't look" is a different fact from "we looked and found little"."""
         _repo, _snapshot, facts = repo_facts
         availability = self._availability(facts, None, DimensionKey.PLANNING_DISCIPLINE)
@@ -235,7 +235,7 @@ class TestSupportCheck:
 
         checked, note = apply_support_check(finding, availability)
 
-        assert checked.verdict is Verdict.NOT_ASSESSED
+        assert checked.verdict is Verdict.NOT_COLLECTED
         assert "input layer absent" in note
 
     def test_all_evidence_suppressed_becomes_insufficient(self, repo_facts) -> None:
@@ -278,13 +278,13 @@ class TestOrchestration:
         assert result.judge_model.startswith("mock:")
         assert result.prompt_version
 
-    def test_planning_is_not_assessed_without_the_cli(self, repo_facts) -> None:
+    def test_planning_is_not_collected_without_the_cli(self, repo_facts) -> None:
         """No session telemetry: the dimension says so rather than guessing."""
         repo, snapshot, facts = repo_facts
         _provider, result = _run(repo, snapshot, facts, metrics=None)
 
         planning = result.finding(DimensionKey.PLANNING_DISCIPLINE)
-        assert planning.verdict is Verdict.NOT_ASSESSED
+        assert planning.verdict is Verdict.NOT_COLLECTED
         assert "not collected" in planning.summary
 
     def test_hallucinating_judge_has_its_claims_dropped(self, repo_facts) -> None:
@@ -312,7 +312,7 @@ class TestOrchestration:
         )
 
         assessed = [
-            f for f in result.findings if f.verdict is not Verdict.NOT_ASSESSED
+            f for f in result.findings if f.verdict is not Verdict.NOT_COLLECTED
         ]
         assert assessed
         assert all(f.verdict is Verdict.INSUFFICIENT_EVIDENCE for f in assessed)

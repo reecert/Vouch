@@ -40,5 +40,5 @@ cd web && npm install && npm run dev     # then open the printed /p/<id> link
 
 The two profiles in `data/profiles/` are generated from **synthetic fixture repos** with a
 mock judge (`fixture://example/...`). They exist to exercise the viewer's range — one with
-session telemetry, one git-only where planning discipline is `not_assessed`. Nothing in
+session telemetry, one git-only where planning discipline is `not_collected`. Nothing in
 them describes a real person.

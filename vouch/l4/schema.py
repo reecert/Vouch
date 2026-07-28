@@ -11,11 +11,19 @@ Two further shapes carry weight:
 
 * **`Confidence` is a band, never a float.** A model asked for 0.0-1.0 will produce 0.82
   and mean nothing by it. Three bands are honest about the resolution actually available.
-* **`Verdict` separates three different kinds of "no".** `insufficient_evidence` (we looked,
-  there wasn't enough), `not_assessed` (we didn't look — the input layer was absent) and
+* **`Verdict` separates four different kinds of "no".** `insufficient_evidence` (we looked,
+  there wasn't enough), `not_collected` (we didn't look — the input layer was absent),
+  `out_of_scope` (we looked, and what exists describes a different population) and
   `contradicted` (we looked, and the evidence points the other way) are distinct facts about
   a candidate. Collapsing them, as a single "unknown" would, loses the one a reader most
   needs.
+* **No two of those values look alike.** `not_assessed` and `not_assessable` were the
+  earlier spellings of the first two, and they are near-homographs: one letter apart,
+  identical for the first twelve characters, on a menu a human types by hand. A misread
+  there does not produce a wrong number, it produces ground truth that says the opposite of
+  what the labeller meant — "we never looked" recorded as "we looked and the data was
+  unusable". The names now differ in their first syllable and describe what happened rather
+  than negating a shared root.
 """
 from __future__ import annotations
 
@@ -39,7 +47,10 @@ __all__ = [
     "CONCLUSIVE_VERDICTS",
 ]
 
-L4_SCHEMA_VERSION = "l4/1"
+#: Bumped to 2 when `not_assessed`/`not_assessable` became `not_collected`/`out_of_scope`.
+#: The constrained output schema changed, so a stored result carrying the old spellings is
+#: not readable as this one and says so rather than half-parsing.
+L4_SCHEMA_VERSION = "l4/2"
 
 
 class DimensionKey(StrEnum):
@@ -58,12 +69,12 @@ class Verdict(StrEnum):
     MODERATE = "moderate"
     LIMITED = "limited"
     INSUFFICIENT_EVIDENCE = "insufficient_evidence"  # looked; not enough to say
-    NOT_ASSESSED = "not_assessed"  # did not look; the input was absent
+    NOT_COLLECTED = "not_collected"  # did not look; the input was never gathered
     # Looked, and the evidence that exists is not valid at the scope this dimension claims
     # — session telemetry from other projects cannot describe work in this repository.
     # Distinct from `insufficient_evidence` because the remedy is different: more data of
     # the same kind would not help, only data of the right kind would.
-    NOT_ASSESSABLE = "not_assessable"
+    OUT_OF_SCOPE = "out_of_scope"
     CONTRADICTED = "contradicted"  # looked; the evidence points the other way
 
 

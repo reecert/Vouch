@@ -124,7 +124,7 @@ def derive_risks(judgment: JudgeResult | None) -> list[str]:
 
     for finding in judgment.findings:
         title = titles.get(finding.dimension, finding.dimension.value)
-        if finding.verdict is Verdict.NOT_ASSESSED:
+        if finding.verdict is Verdict.NOT_COLLECTED:
             out.append(
                 f"{title} could not be assessed from this evidence. Ask about it "
                 "directly rather than reading anything into its absence."

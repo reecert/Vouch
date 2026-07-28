@@ -229,7 +229,7 @@ def test_a_dimension_with_no_input_layer_forces_the_answer(facts) -> None:
     task = build_task(_spec(DimensionKey.PLANNING_DISCIPLINE), "row", facts, metrics=None)
     text = render_task(task)
 
-    assert task.permitted == (Verdict.NOT_ASSESSED,)
+    assert task.permitted == (Verdict.NOT_COLLECTED,)
     assert task.is_forced
     assert "CANNOT BE JUDGED HERE" in text
     assert "none was collected for this row" in text
@@ -244,18 +244,18 @@ def test_out_of_scope_telemetry_forces_the_answer_too(facts) -> None:
         _spec(DimensionKey.PLANNING_DISCIPLINE), "row", facts, machine_wide
     )
 
-    assert task.permitted == (Verdict.NOT_ASSESSABLE,)
+    assert task.permitted == (Verdict.OUT_OF_SCOPE,)
     assert "different population" in render_task(task)
 
 
-def test_a_dimension_that_was_looked_at_does_not_offer_not_assessed(facts) -> None:
+def test_a_dimension_that_was_looked_at_does_not_offer_not_collected(facts) -> None:
     """The converse: where a layer WAS read, "we did not look" is not an answer."""
     for key in (DimensionKey.OWNERSHIP, DimensionKey.VERIFICATION_DISCIPLINE):
         task = build_task(_spec(key), "row", facts, _METRICS)
 
         assert not task.is_forced
-        assert Verdict.NOT_ASSESSED not in task.permitted
-        assert Verdict.NOT_ASSESSABLE not in task.permitted
+        assert Verdict.NOT_COLLECTED not in task.permitted
+        assert Verdict.OUT_OF_SCOPE not in task.permitted
         assert Verdict.INSUFFICIENT_EVIDENCE in task.permitted
 
 
