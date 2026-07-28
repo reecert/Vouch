@@ -12,7 +12,8 @@ Two further shapes carry weight:
 * **`Confidence` is a band, never a float.** A model asked for 0.0-1.0 will produce 0.82
   and mean nothing by it. Three bands are honest about the resolution actually available.
 * **`Verdict` separates four different kinds of "no".** `insufficient_evidence` (we looked,
-  there wasn't enough), `not_collected` (we didn't look — the input layer was absent),
+  and what we found does not settle it — either too little of it, or enough of it pointing
+  nowhere), `not_collected` (we didn't look — the input layer was absent),
   `out_of_scope` (we looked, and what exists describes a different population) and
   `contradicted` (we looked, and the evidence points the other way) are distinct facts about
   a candidate. Collapsing them, as a single "unknown" would, loses the one a reader most
@@ -68,7 +69,13 @@ class Verdict(StrEnum):
     STRONG = "strong"
     MODERATE = "moderate"
     LIMITED = "limited"
-    INSUFFICIENT_EVIDENCE = "insufficient_evidence"  # looked; not enough to say
+    # Looked, and what was found does not settle the question. Two shapes, one verdict:
+    # evidence too thin to divide by, and evidence that is present and does not decide —
+    # `commit_scoping: 2.0-2.0` on a measure whose polarity is neutral, with the session
+    # half of the dimension absent, is a real measurement pointing nowhere. Neither is
+    # `not_collected` (the layer was read) or `out_of_scope` (it was read at the right
+    # scope), and which one it is stays a human's call rather than the harness's.
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
     NOT_COLLECTED = "not_collected"  # did not look; the input was never gathered
     # Looked, and the evidence that exists is not valid at the scope this dimension claims
     # — session telemetry from other projects cannot describe work in this repository.

@@ -390,6 +390,36 @@ def test_a_dimension_that_was_looked_at_does_not_offer_not_collected(facts) -> N
         assert Verdict.INSUFFICIENT_EVIDENCE in task.permitted
 
 
+def test_evidence_that_decides_nothing_is_still_the_labeller_s_call() -> None:
+    """"Present but not decisive" is a verdict on the menu, not a forced answer.
+
+    Every corpus row renders `scope_control` this way: `commit_scoping` measured, neutral,
+    and narrow — `2.0-2.0`, neither direction better — with `edit_revision` absent because
+    a public repo has no session telemetry. The evidence is there, it is not thin, and it
+    points nowhere.
+
+    `insufficient_evidence` is that answer. It is not `not_collected` (the commit trail was
+    read) and not `out_of_scope` (nothing was measured over the wrong population), and
+    forcing either through `assess_availability` would write a harness assertion into the
+    ground truth where a human judgement belongs — the harness knows what was collected, it
+    does not know what decides a question.
+    """
+    task = build_task(_spec(DimensionKey.SCOPE_CONTROL), "row", _RENDER_FIXTURE, None)
+
+    scoping = next(line for line in task.evidence if "commit_scoping" in line)
+    assert "2.0-2.0" in scoping and "neither direction is better" in scoping
+    assert any("no session telemetry" in line for line in task.session)
+
+    assert not task.is_forced
+    assert Verdict.INSUFFICIENT_EVIDENCE in task.permitted
+    assert Verdict.NOT_COLLECTED not in task.permitted
+    assert Verdict.OUT_OF_SCOPE not in task.permitted
+    # Three distinct values, so a label recording one can never be read as another.
+    assert len(
+        {Verdict.INSUFFICIENT_EVIDENCE, Verdict.NOT_COLLECTED, Verdict.OUT_OF_SCOPE}
+    ) == 3
+
+
 def test_the_harness_and_the_judge_ask_the_same_availability_question(facts) -> None:
     """One function decides it for both, so the label and the verdict cannot disagree.
 

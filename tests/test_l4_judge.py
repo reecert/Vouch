@@ -238,6 +238,37 @@ class TestSupportCheck:
         assert checked.verdict is Verdict.NOT_COLLECTED
         assert "input layer absent" in note
 
+    def test_a_measurement_that_decides_nothing_is_not_forced_to_a_verdict(
+        self, repo_facts
+    ) -> None:
+        """The judge side of the same rule the labelling harness follows.
+
+        `scope_control` on a public repo has `commit_scoping` measured — neutral polarity,
+        so neither direction is a reading — and no session telemetry behind
+        `edit_revision`. The evidence is present and settles nothing, which is
+        `insufficient_evidence` and stays a judgement: the layer was read, so
+        `not_collected` is false, and it was read at the right scope, so `out_of_scope` is
+        false. Forcing either would make the harness assert what only a reader can decide,
+        and the labeller — who is not forced here — would be scored against it.
+        """
+        _repo, _snapshot, facts = repo_facts
+        availability = self._availability(facts, None, DimensionKey.SCOPE_CONTROL)
+
+        assert availability.was_looked_at
+        assert not availability.forces_out_of_scope
+
+        finding = DimensionFinding(
+            dimension=DimensionKey.SCOPE_CONTROL,
+            verdict=Verdict.INSUFFICIENT_EVIDENCE,
+            confidence=Confidence.LOW,
+            summary="The measure has no better direction and the session half is absent.",
+            claims=[],
+        )
+        checked, note = apply_support_check(finding, availability)
+
+        assert checked.verdict is Verdict.INSUFFICIENT_EVIDENCE
+        assert note is None
+
     def test_all_evidence_suppressed_becomes_insufficient(self, repo_facts) -> None:
         _repo, _snapshot, facts = repo_facts
         suppressed = SessionMetrics(
