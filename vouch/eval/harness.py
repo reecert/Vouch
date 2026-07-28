@@ -109,6 +109,12 @@ class EvalReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     split: str
+    #: Which corpus produced these numbers, in its own words. Carried onto the report
+    #: because the corpus is what decides what an agreement figure is evidence *about*: the
+    #: calibration corpus is public repositories, which have no session telemetry, so a
+    #: number measured there says nothing about the dimensions that read from L2. Printed
+    #: above the metrics rather than filed beside them.
+    corpus_name: str = ""
     prompt_version: str = ""
     total_labelled: int = 0
     metrics: EvalMetrics = Field(default_factory=EvalMetrics)
@@ -189,6 +195,7 @@ def run_eval(
     *,
     split: str = "holdout",
     prompt_version: str = "",
+    corpus_name: str = "",
 ) -> EvalReport:
     """Score a split. ``judge_fn`` runs the pipeline for one label and returns its finding.
 
@@ -249,6 +256,7 @@ def run_eval(
 
     return EvalReport(
         split=split,
+        corpus_name=corpus_name,
         prompt_version=prompt_version,
         total_labelled=labels.total,
         metrics=metrics,

@@ -277,6 +277,33 @@ class TestHonestyGuards:
         assert "OVERCLAIMED" in text
         assert "never described as 'calibrated'" in text
 
+    def test_a_report_names_the_corpus_above_the_numbers(self) -> None:
+        """What was measured decides what the measurement is about.
+
+        The calibration corpus is other people's public repositories: no row in it has
+        session telemetry, so its agreement figure is evidence about the commit-trail half
+        of the judge and about nothing else. Quoted bare, the same figure reads as a
+        statement about the judge, which is how a limit becomes a claim.
+        """
+        labels = LabelSet(holdout=[label(Verdict.STRONG)])
+        report = run_eval(
+            labels,
+            lambda row: finding(row.verdict),
+            split="holdout",
+            corpus_name="commit-trail calibration corpus (L1 only)",
+        )
+        text = format_report(report)
+
+        assert "commit-trail calibration corpus (L1 only)" in text
+        assert text.index("corpus:") < text.index("METRICS")
+
+    def test_an_unnamed_corpus_says_so_rather_than_printing_nothing(self) -> None:
+        """A missing line reads as "nothing to say here", and here that is a false claim."""
+        labels = LabelSet(holdout=[label(Verdict.STRONG)])
+        report = run_eval(labels, lambda row: finding(row.verdict), split="holdout")
+
+        assert "cannot be attributed" in format_report(report)
+
 
 class TestLabelPrivacy:
     """No third-party address may enter this repository, in any field or any comment.

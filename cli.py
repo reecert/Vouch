@@ -559,7 +559,11 @@ def eval_(
 
     try:
         report = run_eval(
-            labels, judge_one, split=split, prompt_version=PROMPT_VERSION
+            labels,
+            judge_one,
+            split=split,
+            prompt_version=PROMPT_VERSION,
+            corpus_name=corpus.name,
         )
     except EvalError as e:
         typer.echo(f"eval refused: {e}", err=True)

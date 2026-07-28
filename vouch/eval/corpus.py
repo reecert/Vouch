@@ -107,10 +107,25 @@ class RepoSpec(BaseModel):
 
 
 class Corpus(BaseModel):
+    """A set of rows, and — required — what a number measured over them is about.
+
+    ``name`` has no default. A corpus of public repositories can only ever calibrate the
+    half of the pipeline that reads git, and an agreement number quoted as "the eval
+    corpus" carries none of that: it reads as a statement about the judge, which is what
+    everyone downstream will take it for. The name is the one field that travels with every
+    citation, so the limit lives in it.
+
+    ``calibrates`` says the same thing per dimension, in a form a test can check against
+    :data:`vouch.l4.dimensions.DIMENSIONS` — the prose in ``notes`` cannot notice when a
+    dimension gains a layer, and this can.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     schema_version: str
+    name: str = Field(min_length=1)
     measured_at_config: str = ""
+    calibrates: dict[str, Literal["full", "l1_half", "none"]] = Field(default_factory=dict)
     repos: list[RepoSpec] = Field(default_factory=list)
     notes: dict[str, str] = Field(default_factory=dict)
 

@@ -132,6 +132,7 @@ def _corpus(path: Path, repo: Path) -> Path:
 
     path.write_text(
         "schema_version: eval-corpus/1\n"
+        "name: one-row fixture corpus (L1 only)\n"
         "repos:\n"
         "  - id: fixture\n"
         "    axis: rich\n"
