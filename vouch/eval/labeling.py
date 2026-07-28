@@ -30,6 +30,16 @@ say here", which is a claim, and the wrong one.
 `insufficient_evidence` is offered as a first-class answer everywhere, because a corpus of
 only conclusive labels teaches nothing about overclaiming, which is the failure the whole
 quality bar exists to catch.
+
+**What is not a judgement call is not offered as one.** Whether a dimension *can* be
+assessed here is decided by :func:`vouch.l4.dimensions.assess_availability`, deterministically
+and before the evidence is drawn — the same function that decides it for the judge. When it
+says the input layer was absent, the task says so and permits exactly one answer. Leaving
+`not_collected` sitting in the middle of a seven-option menu invited two failures at once: a
+labeller picking it where evidence did exist, and a labeller picking `insufficient_evidence`
+where nothing had been looked at — the two the verdict enum exists to keep apart. The
+converse holds too: where a layer *was* read, "we did not look" is not an admissible answer
+and does not appear on the menu at all.
 """
 from __future__ import annotations
 
@@ -46,11 +56,12 @@ from vouch.l1.config import L1_CONFIG
 from vouch.l1.facts import FactStatus, RepoFacts
 from vouch.l2.payload import MetricKey, SessionMetrics
 from vouch.l3.join import CorroborationReport
-from vouch.l4.dimensions import DIMENSIONS, DimensionSpec
+from vouch.l4.dimensions import DIMENSIONS, DimensionSpec, assess_availability
 from vouch.l4.schema import DimensionKey, Verdict
 
 __all__ = [
     "SPLIT_HOLDOUT_SHARE",
+    "JUDGEABLE_VERDICTS",
     "LabelTask",
     "assign_split",
     "build_task",
@@ -65,6 +76,14 @@ __all__ = [
 #: iterate against. Applied per (corpus_id, dimension), not per repo, so no single history
 #: lands entirely on one side.
 SPLIT_HOLDOUT_SHARE = 1 / 3
+
+#: The verdicts a human is entitled to reach by reading evidence. The other two are
+#: statements about whether there was anything to read, which `assess_availability` decides
+#: before the labeller sees the row — so they are forced when they apply and absent when
+#: they do not, never sitting on the menu as a third kind of thing to pick.
+JUDGEABLE_VERDICTS: tuple[Verdict, ...] = tuple(
+    v for v in Verdict if v not in (Verdict.NOT_ASSESSED, Verdict.NOT_ASSESSABLE)
+)
 
 
 @dataclass
@@ -82,7 +101,15 @@ class LabelTask:
     session: list[str] = field(default_factory=list)
     confounds: list[str] = field(default_factory=list)
     corroboration: list[str] = field(default_factory=list)
-    permitted: tuple[Verdict, ...] = tuple(Verdict)
+    #: The answers this task will accept. Narrowed to one when availability, not judgement,
+    #: settles the dimension; otherwise every verdict a human is entitled to reach.
+    permitted: tuple[Verdict, ...] = JUDGEABLE_VERDICTS
+    #: Why the answer is forced, in the labeller's terms. Empty when it is not.
+    forced_reason: str = ""
+
+    @property
+    def is_forced(self) -> bool:
+        return len(self.permitted) == 1
 
 
 def assign_split(corpus_id: str, dimension: DimensionKey) -> str:
@@ -193,6 +220,27 @@ def build_task(
         for c in relevant
     ] or ["  (none bearing on this dimension)"]
 
+    # The same call the judge makes, with the same inputs the labeller can see. Commit
+    # judgments are zero by construction: they are L4's reading of the diffs, and no diff
+    # text reaches this harness — so a dimension whose only remaining evidence would have
+    # been the model's own diff reading is, to a labeller, unassessable.
+    availability = assess_availability(spec, facts, metrics, n_commit_judgments=0)
+    permitted, forced_reason = JUDGEABLE_VERDICTS, ""
+    if availability.is_not_assessable:
+        permitted = (Verdict.NOT_ASSESSABLE,)
+        forced_reason = (
+            "The only telemetry that could answer this was measured over a different "
+            "population than this dimension claims, so it cannot describe work here. "
+            "More evidence of the same kind would not help."
+        )
+    elif not availability.was_looked_at:
+        permitted = (Verdict.NOT_ASSESSED,)
+        forced_reason = (
+            f"This dimension reads only from session telemetry "
+            f"({', '.join(k.value for k in spec.l2_metrics)}), and none was collected for "
+            "this row. Nothing was looked at, so there is no thinness to judge."
+        )
+
     corr: list[str] = []
     if corroboration is not None:
         corr = [
@@ -216,6 +264,8 @@ def build_task(
         session=session,
         confounds=confounds,
         corroboration=corr,
+        permitted=permitted,
+        forced_reason=forced_reason,
     )
 
 
@@ -237,11 +287,20 @@ def render_task(task: LabelTask) -> str:
     ]
     if task.corroboration:
         lines += ["", "SESSION CORROBORATION", *task.corroboration]
+    lines += ["", "-" * 78, f"QUESTION: {task.question}", ""]
+
+    if task.is_forced:
+        only = task.permitted[0].value
+        lines += [
+            "THIS DIMENSION CANNOT BE JUDGED HERE — the answer is not yours to pick.",
+            f"  {task.forced_reason}",
+            "",
+            f"  the one admissible answer: {only}",
+            "",
+        ]
+        return "\n".join(lines)
+
     lines += [
-        "",
-        "-" * 78,
-        f"QUESTION: {task.question}",
-        "",
         "  " + " | ".join(v.value for v in task.permitted),
         "",
         "`insufficient_evidence` is a real answer and is expected to be common. Declining",

@@ -220,6 +220,40 @@ def test_label_refuses_an_answer_outside_the_verdict_vocabulary(tmp_path: Path) 
     assert not labels.exists()
 
 
+def test_label_refuses_a_judged_verdict_where_nothing_was_looked_at(tmp_path: Path) -> None:
+    """`planning_discipline` reads from L2 alone, and the corpus has no session logs.
+
+    The harness forces the answer; this checks the loop enforces it rather than merely
+    printing it. A `moderate` here would be ground truth invented out of nothing.
+    """
+    repo = tmp_path / "repo"
+    repos.healthy(repo)
+    labels = tmp_path / "labels.local.yaml"
+
+    result = runner.invoke(
+        app,
+        [
+            "label",
+            "--corpus", str(_corpus(tmp_path / "corpus.yaml", repo)),
+            "--labels", str(labels),
+            "--limit", "4",
+        ],
+        # Three ordinary dimensions, then planning: a judged answer, then the forced one.
+        input=(
+            "insufficient_evidence\nthin on every count\n"
+            "insufficient_evidence\nthin on every count\n"
+            "insufficient_evidence\nthin on every count\n"
+            "moderate\n"
+            "not_assessed\nno session log exists for this repository\n"
+        ),
+    )
+
+    assert result.exit_code == 0, result.output
+    assert "CANNOT BE JUDGED HERE" in result.output
+    assert "expected one of not_assessed" in result.output
+    assert "4 label(s) written" in result.output
+
+
 def test_label_catches_an_address_in_a_reason_before_it_is_written(tmp_path: Path) -> None:
     """The labeller retypes one line; the file is never left invalid mid-round."""
     repo = tmp_path / "repo"

@@ -183,6 +183,60 @@ def test_confounds_are_shown_with_their_direction(tmp_path: Path) -> None:
     assert any("solo_repo" in c for c in task.confounds)
 
 
+# --- what is not a judgement call is not offered as one ----------------------------------
+
+
+def test_a_dimension_with_no_input_layer_forces_the_answer(facts) -> None:
+    """`planning_discipline` reads from L2 alone. No CLI run means nothing was looked at.
+
+    Offered mid-menu, `not_collected` is one of seven things to pick and reads as a
+    judgement about thin evidence. It is not: it is a fact about what was collected, known
+    before the labeller saw the row.
+    """
+    task = build_task(_spec(DimensionKey.PLANNING_DISCIPLINE), "row", facts, metrics=None)
+    text = render_task(task)
+
+    assert task.permitted == (Verdict.NOT_ASSESSED,)
+    assert task.is_forced
+    assert "CANNOT BE JUDGED HERE" in text
+    assert "none was collected for this row" in text
+    # The menu it would otherwise have sat in the middle of is gone.
+    assert "insufficient_evidence" not in text
+
+
+def test_out_of_scope_telemetry_forces_the_answer_too(facts) -> None:
+    """Machine-wide sessions cannot describe work in one repo, however many there are."""
+    machine_wide = _METRICS.model_copy(update={"scope": MetricScope.MACHINE})
+    task = build_task(
+        _spec(DimensionKey.PLANNING_DISCIPLINE), "row", facts, machine_wide
+    )
+
+    assert task.permitted == (Verdict.NOT_ASSESSABLE,)
+    assert "different population" in render_task(task)
+
+
+def test_a_dimension_that_was_looked_at_does_not_offer_not_assessed(facts) -> None:
+    """The converse: where a layer WAS read, "we did not look" is not an answer."""
+    for key in (DimensionKey.OWNERSHIP, DimensionKey.VERIFICATION_DISCIPLINE):
+        task = build_task(_spec(key), "row", facts, _METRICS)
+
+        assert not task.is_forced
+        assert Verdict.NOT_ASSESSED not in task.permitted
+        assert Verdict.NOT_ASSESSABLE not in task.permitted
+        assert Verdict.INSUFFICIENT_EVIDENCE in task.permitted
+
+
+def test_the_harness_and_the_judge_ask_the_same_availability_question(facts) -> None:
+    """One function decides it for both, so the label and the verdict cannot disagree.
+
+    If the harness reimplemented this, a labeller could be forced into `not_collected` on a
+    dimension the judge went on to answer — and the disagreement would score as the judge
+    being wrong.
+    """
+    source = inspect.getsource(labeling)
+    assert "assess_availability" in source
+
+
 def test_insufficient_evidence_is_offered_as_a_first_class_answer(facts) -> None:
     task = build_task(_spec(DimensionKey.OWNERSHIP), "row", facts)
     text = render_task(task)

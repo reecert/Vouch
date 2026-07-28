@@ -391,7 +391,6 @@ def label_(
         typer.echo(f"no corpus row with id {only!r}", err=True)
         raise typer.Exit(2)
 
-    verdicts = [v.value for v in Verdict]
     provenance = current_provenance()
     if provenance.dirty:
         typer.echo(
@@ -430,13 +429,20 @@ def label_(
         task = build_task(spec, corpus_id, facts_result, metrics=None)
         typer.echo(render_task(task))
 
-        answer = typer.prompt("verdict (or 'skip', 'quit')").strip()
+        # What this task will accept, which is not always the whole vocabulary: whether a
+        # dimension can be assessed at all is settled deterministically before the labeller
+        # sees it, so those verdicts are forced where they apply rather than offered.
+        permitted = [v.value for v in task.permitted]
+        while True:
+            answer = typer.prompt("verdict (or 'skip', 'quit')").strip()
+            if answer in ("quit", "skip") or answer in permitted:
+                break
+            # Re-ask rather than move on. Where the answer is forced there is nothing to
+            # move on to — the labeller has one admissible answer and mistyped it.
+            typer.echo(f"not a verdict; expected one of {', '.join(permitted)}", err=True)
         if answer == "quit":
             break
         if answer == "skip":
-            continue
-        if answer not in verdicts:
-            typer.echo(f"not a verdict; expected one of {', '.join(verdicts)}", err=True)
             continue
 
         reason = typer.prompt("reason (one falsifiable line a sceptic could check)").strip()
