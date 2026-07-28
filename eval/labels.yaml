@@ -11,6 +11,18 @@
 #              | not_collected | out_of_scope | contradicted
 #   reason:    REQUIRED, one line, falsifiable. Point at behaviour in the history that a
 #              sceptic could check. "vibes" is not a reason and loading will fail.
+#   leaned_on: REQUIRED, non-empty. Which measure(s) the verdict actually rested on — a
+#              fact or metric key this dimension declares, or `none` on its own.
+#
+# WHY `leaned_on` EXISTS. Some dimensions rest on several measures and NOTHING DEFINES HOW
+# TO COMBINE THEM. `ownership` is ownership_loop + followup_latency + revert_rate; on httpx
+# those read 0.85 (under a squash warning), 92 days and 0.002, and no rule anywhere says
+# what verdict that adds up to. Two labellers can land differently there without either
+# being careless. Defining a weighting here would bake one person's intuition into the
+# ground truth and then score the judge against it; recording which measure carried the
+# judgement instead turns the underspecification into data. If the ownership labels split
+# by which fact was leaned on, that is a finding about the dimension — visible in the
+# corpus rather than hidden inside it.
 #
 # NO ADDRESSES. NOT IN A FIELD, NOT IN A COMMENT, NOT IN A `reason`.
 # There is no `author:` field to put one in, and `load_labels` scans the raw bytes of this

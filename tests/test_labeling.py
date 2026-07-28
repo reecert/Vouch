@@ -387,6 +387,7 @@ def test_a_label_is_written_into_the_pool_its_split_assigned(tmp_path: Path) -> 
         DimensionKey.OWNERSHIP,
         Verdict.INSUFFICIENT_EVIDENCE,
         "solo repo, so there is nobody else's defect to have returned to",
+        ["ownership_loop"],
         "holdout",
     )
 
@@ -405,6 +406,7 @@ def test_a_written_label_reloads_through_the_validator(tmp_path: Path) -> None:
         DimensionKey.OWNERSHIP,
         Verdict.LIMITED,
         "two self-fixes over ten years, neither with a test in the same commit",
+        ["ownership_loop"],
         "train",
         provenance=_PROV,
     )
@@ -431,6 +433,7 @@ def _write(path: Path, prov: LabelProvenance, corpus_id: str = "hunter") -> None
         DimensionKey.OWNERSHIP,
         Verdict.LIMITED,
         "two self-fixes over ten years, neither with a test in the same commit",
+        ["ownership_loop"],
         "train",
         provenance=prov,
     )
@@ -551,6 +554,7 @@ def test_a_reason_carrying_an_address_fails_on_reload(tmp_path: Path) -> None:
         DimensionKey.OWNERSHIP,
         Verdict.STRONG,
         "someone@example.com fixes their own defects",
+        ["ownership_loop"],
         "train",
     )
 

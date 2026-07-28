@@ -36,6 +36,7 @@ def label(
         dimension=dimension,
         verdict=verdict,
         reason="returns to their own defects with tests, see the commit trail",
+        leaned_on=["ownership_loop"],
     )
 
 
@@ -57,6 +58,54 @@ class TestLabelValidation:
                 dimension=DimensionKey.OWNERSHIP,
                 verdict=Verdict.STRONG,
                 reason="   ",
+                leaned_on=["ownership_loop"],
+            )
+
+    def test_leaned_on_is_required(self) -> None:
+        """`ownership` rests on three facts and no rule says how to combine them.
+
+        Rather than invent a weighting — which would bake one person's intuition into the
+        ground truth and then score the judge against it — the label records which measure
+        the verdict actually rested on, so the underspecification is visible in the corpus.
+        """
+        with pytest.raises(ValidationError):
+            DimensionLabel(
+                corpus_id="hunter",
+                dimension=DimensionKey.OWNERSHIP,
+                verdict=Verdict.STRONG,
+                reason="returns to their own defects with tests",
+            )
+
+    def test_leaned_on_must_name_a_measure_this_dimension_rests_on(self) -> None:
+        """Free text here would be unanalysable, which defeats the point of collecting it."""
+        with pytest.raises(ValidationError, match="does not rest on"):
+            DimensionLabel(
+                corpus_id="hunter",
+                dimension=DimensionKey.OWNERSHIP,
+                verdict=Verdict.STRONG,
+                reason="returns to their own defects with tests",
+                leaned_on=["plan_before_execute"],  # a different dimension's metric
+            )
+
+    def test_a_multi_fact_label_may_name_more_than_one(self) -> None:
+        """Two labellers leaning on different facts is the finding, not a defect to hide."""
+        row = DimensionLabel(
+            corpus_id="httpx",
+            dimension=DimensionKey.OWNERSHIP,
+            verdict=Verdict.LIMITED,
+            reason="the self-fix rate is high but every pair is a squash artefact",
+            leaned_on=["ownership_loop", "followup_latency"],
+        )
+        assert row.leaned_on == ["ownership_loop", "followup_latency"]
+
+    def test_none_cannot_share_the_field_with_a_measure(self) -> None:
+        with pytest.raises(ValidationError, match="cannot share"):
+            DimensionLabel(
+                corpus_id="hunter",
+                dimension=DimensionKey.OWNERSHIP,
+                verdict=Verdict.INSUFFICIENT_EVIDENCE,
+                reason="nothing in the trail speaks to this",
+                leaned_on=["none", "revert_rate"],
             )
 
     def test_insufficient_evidence_is_a_valid_label(self) -> None:
@@ -71,6 +120,7 @@ class TestLabelValidation:
             "dimension": "ownership",
             "verdict": "strong",
             "reason": "because of the commit trail",
+            "leaned_on": ["ownership_loop"],
         }
         path = tmp_path / "labels.yaml"
         path.write_text(yaml.safe_dump({"train": [row], "holdout": [row]}))
@@ -252,6 +302,7 @@ class TestLabelPrivacy:
                 dimension=DimensionKey.OWNERSHIP,
                 verdict=Verdict.STRONG,
                 reason="fixes their own defects, see the commit trail",
+                leaned_on=["ownership_loop"],
             )
 
     def test_an_address_hidden_in_a_reason_is_rejected(self) -> None:
@@ -262,6 +313,7 @@ class TestLabelPrivacy:
                 dimension=DimensionKey.OWNERSHIP,
                 verdict=Verdict.STRONG,
                 reason="someone@example.com returns to their own defects with tests",
+                leaned_on=["ownership_loop"],
             )
 
     def test_an_address_in_a_comment_is_rejected(self, tmp_path: Path) -> None:
@@ -284,6 +336,7 @@ class TestLabelPrivacy:
                             "dimension": "ownership",
                             "verdict": "strong",
                             "reason": "returns to their own defects with tests",
+                            "leaned_on": ["ownership_loop"],
                         }
                     ],
                     "holdout": [],

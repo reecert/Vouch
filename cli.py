@@ -26,7 +26,12 @@ from vouch.eval.labeling import (
     pending_tasks,
     render_task,
 )
-from vouch.eval.labels import DimensionLabel, LabelSet
+from vouch.eval.labels import (
+    NO_MEASURE,
+    DimensionLabel,
+    LabelSet,
+    permitted_measures,
+)
 from vouch.ingest import DEFAULT_CACHE_DIR, ingest, resolve_repo
 from vouch.l1.cache import cached_extract
 from vouch.l1.extract import extract_facts
@@ -445,6 +450,21 @@ def label_(
         if answer == "skip":
             continue
 
+        # Which measure the verdict actually rested on. Asked because several dimensions
+        # rest on more than one and nothing defines how to combine them: recording the
+        # answer turns that underspecification into data instead of leaving it inside the
+        # labeller's head. Not asked where the answer was forced — there was no measure.
+        # Asked before the reason so that the reason is written about a named measure, and
+        # so an address in it is caught on the prompt right after it is typed.
+        leaned_on = [NO_MEASURE]
+        if not task.is_forced:
+            choices = sorted(permitted_measures(spec.key))
+            raw = typer.prompt(
+                "leaned on (which measure carried it; comma-separated if genuinely "
+                f"several) [{', '.join(choices)}]"
+            )
+            leaned_on = [part.strip() for part in raw.split(",") if part.strip()]
+
         reason = typer.prompt("reason (one falsifiable line a sceptic could check)").strip()
         try:
             # The loader's own validator, run *before* the write. An address in a `reason`
@@ -455,6 +475,7 @@ def label_(
                 dimension=spec.key,
                 verdict=Verdict(answer),
                 reason=reason,
+                leaned_on=leaned_on,
             )
         except ValidationError as e:
             typer.echo(f"not written: {e.errors()[0]['msg']}", err=True)
@@ -467,6 +488,7 @@ def label_(
                 spec.key,
                 Verdict(answer),
                 reason,
+                leaned_on,
                 task.split,
                 provenance=provenance,
             )

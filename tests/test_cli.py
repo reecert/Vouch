@@ -163,7 +163,11 @@ def test_label_writes_one_answer_into_the_pool_its_split_assigned(tmp_path: Path
             "--labels", str(labels),
             "--limit", "1",
         ],
-        input="moderate\nfive of twelve commits pair a fix with a test in the same commit\n",
+        input=(
+            "moderate\n"
+            "test_accompanies_fix\n"
+            "five of twelve commits pair a fix with a test in the same commit\n"
+        ),
     )
 
     assert result.exit_code == 0, result.output
@@ -176,6 +180,39 @@ def test_label_writes_one_answer_into_the_pool_its_split_assigned(tmp_path: Path
     assert written[expected][0]["corpus_id"] == "fixture"
     # The split came off the hash, not off the answer that was given.
     assert written[expected][0]["verdict"] == "moderate"
+
+
+def test_label_records_which_measure_carried_the_verdict(tmp_path: Path) -> None:
+    """No rule combines a multi-fact dimension, so the corpus records what was leaned on.
+
+    A forced answer is not asked — there was no measure — and is recorded as `none` rather
+    than left blank, since a blank is what an unfilled field looks like.
+    """
+    import yaml
+
+    repo = tmp_path / "repo"
+    repos.healthy(repo)
+    labels = tmp_path / "labels.local.yaml"
+
+    result = runner.invoke(
+        app,
+        [
+            "label",
+            "--corpus", str(_corpus(tmp_path / "corpus.yaml", repo)),
+            "--labels", str(labels),
+            "--limit", "1",
+        ],
+        input=(
+            "limited\n"
+            "test_accompanies_fix, test_or_build_after_edit\n"
+            "five of twelve fixes ship a test, and no session trail contradicts it\n"
+        ),
+    )
+
+    assert result.exit_code == 0, result.output
+    written = yaml.safe_load(labels.read_text())
+    row = (written["train"] or written["holdout"])[0]
+    assert row["leaned_on"] == ["test_accompanies_fix", "test_or_build_after_edit"]
 
 
 def test_label_quits_without_writing(tmp_path: Path) -> None:
@@ -240,9 +277,9 @@ def test_label_refuses_a_judged_verdict_where_nothing_was_looked_at(tmp_path: Pa
         ],
         # Three ordinary dimensions, then planning: a judged answer, then the forced one.
         input=(
-            "insufficient_evidence\nthin on every count\n"
-            "insufficient_evidence\nthin on every count\n"
-            "insufficient_evidence\nthin on every count\n"
+            "insufficient_evidence\nnone\nthin on every count\n"
+            "insufficient_evidence\nnone\nthin on every count\n"
+            "insufficient_evidence\nnone\nthin on every count\n"
             "moderate\n"
             "not_collected\nno session log exists for this repository\n"
         ),
@@ -268,7 +305,7 @@ def test_label_catches_an_address_in_a_reason_before_it_is_written(tmp_path: Pat
             "--labels", str(labels),
             "--limit", "1",
         ],
-        input="strong\nalice@example.com fixes her own defects\nquit\n",
+        input="strong\nnone\nalice@example.com fixes her own defects\nquit\n",
     )
 
     assert result.exit_code == 0
@@ -291,13 +328,13 @@ def test_label_skips_a_row_that_is_already_labelled(tmp_path: Path) -> None:
 
     args = ["label", "--corpus", str(corpus), "--labels", str(labels), "--limit", "1"]
     first = runner.invoke(
-        app, args, input="moderate\ntwelve commits, five with a test alongside\n"
+        app, args, input="moderate\ntest_accompanies_fix\ntwelve commits, five with a test alongside\n"
     )
     assert header(DIMENSIONS[0]) in first.output, first.output
 
     # Second run: the first dimension is done, so the next pending one is offered instead.
     result = runner.invoke(
-        app, args, input="insufficient_evidence\nnothing in the trail speaks to this\n"
+        app, args, input="insufficient_evidence\nnone\nnothing in the trail speaks to this\n"
     )
 
     assert result.exit_code == 0, result.output

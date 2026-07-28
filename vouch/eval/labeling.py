@@ -397,6 +397,7 @@ def append_label(
     dimension: DimensionKey,
     verdict: Verdict,
     reason: str,
+    leaned_on: list[str],
     split: str,
     provenance: LabelProvenance | None = None,
 ) -> None:
@@ -434,6 +435,10 @@ def append_label(
             "dimension": dimension.value,
             "verdict": verdict.value,
             "reason": reason.strip(),
+            # Which measure the judgement rested on. The combining rule for a multi-fact
+            # dimension is deliberately undefined; this is what makes that visible in the
+            # corpus rather than hidden inside it.
+            "leaned_on": list(leaned_on),
         }
     ]
     # Provenance first: it is the thing that decides whether anything below it still means

@@ -32,17 +32,35 @@ import re
 from pathlib import Path
 
 import yaml
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
+from vouch.l4.dimensions import DIMENSIONS
 from vouch.l4.schema import DimensionKey, Verdict
 
 __all__ = [
     "LabelValidationError",
+    "NO_MEASURE",
     "DimensionLabel",
     "LabelProvenance",
     "LabelSet",
     "load_labels",
+    "permitted_measures",
 ]
+
+#: `leaned_on` when the verdict rested on no measure at all — a forced answer, or a decline
+#: against evidence that was entirely suppressed. Spelled out rather than left as an empty
+#: list, because an empty list is what an unfilled field looks like.
+NO_MEASURE = "none"
+
+
+def permitted_measures(dimension: DimensionKey) -> set[str]:
+    """Every measure a label for this dimension may say it leaned on.
+
+    Read off the dimension's own declaration, so a fact added to a dimension is immediately
+    citable and a fact removed from one immediately is not.
+    """
+    spec = next(s for s in DIMENSIONS if s.key is dimension)
+    return {*spec.l1_facts, *(m.value for m in spec.l2_metrics), NO_MEASURE}
 
 #: Deliberately broad. A false positive here costs one rephrased `reason`; a false negative
 #: puts somebody's address in a public git history, where deleting it later is not enough.
@@ -59,6 +77,20 @@ class DimensionLabel(BaseModel):
     ``corpus_id`` is the only identifier. There is no `repo`, no `author` and no `aliases`
     field, because a field that can hold an address eventually holds one — the guarantee is
     the absent field, not the discipline of whoever fills the file in.
+
+    ``leaned_on`` exists because some dimensions rest on several measures and **nothing
+    anywhere says how to combine them**. `ownership` is `ownership_loop` + `followup_latency`
+    + `revert_rate`; on httpx those are a flattering 0.85 under a squash warning, 92 days,
+    and 0.002, and no rule in this codebase says what verdict that adds up to. Two labellers
+    — or the same one on two days — can reach different verdicts there without either being
+    careless.
+
+    The rule is deliberately *not* defined here. Inventing a weighting to make the corpus
+    tidy would bake one person's intuition into the ground truth and then score the judge
+    against it. Recording which measure the judgement actually rested on turns the
+    underspecification into data instead: if the ownership labels split by which fact was
+    leaned on, that is a finding about the dimension, visible in the corpus rather than
+    hidden inside it.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -67,6 +99,10 @@ class DimensionLabel(BaseModel):
     dimension: DimensionKey
     verdict: Verdict
     reason: str  # REQUIRED, non-blank
+    #: Which measure(s) this verdict actually rested on. REQUIRED and non-empty; each entry
+    #: is a fact key or metric key this dimension declares, or `none` on its own where the
+    #: verdict rests on no measure at all (a forced answer, or a decline against silence).
+    leaned_on: list[str]
 
     @field_validator("reason")
     @classmethod
@@ -92,6 +128,27 @@ class DimensionLabel(BaseModel):
                 "eval/repos.yaml, which resolves to a person only against a clone."
             )
         return v
+
+    @model_validator(mode="after")
+    def _leaned_on_names_this_dimension_evidence(self) -> DimensionLabel:
+        if not self.leaned_on:
+            raise ValueError(
+                "leaned_on is required: name the measure this verdict rested on, or "
+                f"['{NO_MEASURE}'] if it rested on none"
+            )
+        if NO_MEASURE in self.leaned_on and len(self.leaned_on) > 1:
+            raise ValueError(
+                f"leaned_on has '{NO_MEASURE}' alongside a measure. It means the verdict "
+                "rested on no measure at all, so it cannot share the field."
+            )
+        permitted = permitted_measures(self.dimension)
+        unknown = [k for k in self.leaned_on if k not in permitted]
+        if unknown:
+            raise ValueError(
+                f"leaned_on names {unknown}, which {self.dimension.value} does not rest on. "
+                f"Expected any of: {', '.join(sorted(permitted))}."
+            )
+        return self
 
     @property
     def key(self) -> tuple[str, DimensionKey]:
