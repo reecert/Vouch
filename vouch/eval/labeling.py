@@ -54,7 +54,7 @@ from vouch.eval.labels import LabelProvenance
 from vouch.l1.cache import EXTRACTOR_VERSION
 from vouch.l1.config import L1_CONFIG
 from vouch.l1.facts import FactStatus, RepoFacts
-from vouch.l1.interval import Polarity
+from vouch.l1.interval import Polarity, format_range
 from vouch.l2.metrics import METRIC_POLARITY
 from vouch.l2.payload import MetricKey, SessionMetrics
 from vouch.l3.join import CorroborationReport
@@ -141,7 +141,7 @@ _DIRECTION = {
 def _band(low: float | None, high: float | None, unit: str) -> str:
     if low is None or high is None:
         return "no interval"
-    return f"{low:g}-{high:g}{unit}"
+    return f"{format_range(low, high)}{unit}"
 
 
 def _direction(polarity: Polarity) -> str:

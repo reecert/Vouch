@@ -51,6 +51,8 @@ __all__ = [
     "Interval",
     "LENIENT_LEVEL",
     "STRICT_LEVEL",
+    "SIGNIFICANT_FIGURES",
+    "format_range",
     "wilson_bounds",
     "asymmetric_interval",
     "median_interval",
@@ -64,6 +66,40 @@ LENIENT_LEVEL = 0.80
 #: Confidence level for the bound that would support an *unfavourable* reading. Higher, so
 #: a damning claim has to be earned. See the module docstring for why these differ.
 STRICT_LEVEL = 0.95
+
+
+#: How many significant figures an interval is published at. Two, because that is roughly
+#: what these intervals actually carry: a Wilson bound off a denominator of five is not
+#: precise to a third digit, and printing one would be the same overstatement in miniature
+#: that the intervals exist to prevent.
+SIGNIFICANT_FIGURES = 2
+
+#: A hard cap on decimal places, so a bound near zero produces a readable number rather than
+#: a run of zeros. Reached only by intervals that are already saying "essentially none".
+_MAX_DECIMALS = 6
+
+
+def format_range(low: float, high: float, sig: int = SIGNIFICANT_FIGURES) -> str:
+    """Both ends of an interval at the same, stated precision.
+
+    ``%g`` was the previous formatter and it varies its precision by magnitude while
+    stripping trailing zeros, so `0.0003-0.005` and `2-2` came out of the same code path
+    carrying quite different amounts of information — and looked, on the page, equally
+    exact. A reader comparing two dimensions was comparing two different resolutions
+    without being told.
+
+    Both ends are formatted to whatever decimal count gives the *smaller* bound ``sig``
+    significant figures, so neither end is silently rounded past what it supports and the
+    pair reads as one measurement rather than two. `2-2` becomes `2.0-2.0`; `0.0003-0.005`
+    becomes `0.00030-0.00500`; `92-119` stays `92-119`, because at that magnitude two
+    significant figures is the integer.
+    """
+    magnitudes = [abs(v) for v in (low, high) if v]
+    if not magnitudes:
+        return f"{low:.1f}-{high:.1f}"
+    decimals = sig - 1 - math.floor(math.log10(min(magnitudes)))
+    decimals = max(0, min(_MAX_DECIMALS, decimals))
+    return f"{low:.{decimals}f}-{high:.{decimals}f}"
 
 
 class Polarity(StrEnum):

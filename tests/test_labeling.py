@@ -12,6 +12,7 @@ weight, and each has a test:
 from __future__ import annotations
 
 import inspect
+import re
 from pathlib import Path
 
 import pytest
@@ -128,8 +129,27 @@ def test_a_thin_fact_is_shown_as_an_interval_not_a_zero(facts) -> None:
     task = build_task(_spec(DimensionKey.VERIFICATION_DISCIPLINE), "row", facts)
     line = next(line for line in task.evidence if "test_accompanies_fix" in line)
 
-    assert "0-0.4" in line.replace(" ", "")
+    assert "0.00-0.43" in line
     assert "0/5" in line
+
+
+def test_two_intervals_are_printed_at_the_same_precision(facts) -> None:
+    """`%g` gave `0.0003-0.005` and `2-2` the same apparent exactness. They are not.
+
+    A labeller comparing two dimensions was comparing two resolutions without being told
+    which was which.
+    """
+    task = build_task(_spec(DimensionKey.OWNERSHIP), "row", facts)
+    bands = [
+        m for line in task.evidence
+        if (m := re.search(r"(\d+(?:\.\d+)?)-(\d+(?:\.\d+)?)", line))
+    ]
+
+    assert bands, "no interval was rendered at all"
+    for band in bands:
+        low, high = band.group(1), band.group(2)
+        decimals = [len(v.split(".")[1]) if "." in v else 0 for v in (low, high)]
+        assert decimals[0] == decimals[1], band.group(0)
 
 
 def test_every_layer_the_question_asks_about_is_rendered(facts) -> None:

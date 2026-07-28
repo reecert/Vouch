@@ -23,6 +23,7 @@ from vouch.l1.interval import (
     STRICT_LEVEL,
     Polarity,
     asymmetric_interval,
+    format_range,
     median_interval,
     wilson_bounds,
     z_for,
@@ -115,6 +116,30 @@ def test_a_damning_claim_needs_more_evidence_than_a_flattering_one() -> None:
     # sit the same distance from the extreme. They do not.
     symmetric_low = wilson_bounds(5, 5, STRICT_LEVEL)[0]
     assert flattering.low > symmetric_low
+
+
+def test_an_interval_prints_both_ends_at_the_same_significant_figures() -> None:
+    """`%g` varied its precision by magnitude and stripped trailing zeros.
+
+    `0.0003-0.005` and `2-2` came off the same code path carrying quite different amounts
+    of information, and looked equally exact on the page.
+    """
+    assert format_range(0.0003, 0.005) == "0.00030-0.00500"
+    assert format_range(2, 2) == "2.0-2.0"
+    # At this magnitude two significant figures IS the integer; no false decimals.
+    assert format_range(92, 119) == "92-119"
+
+
+def test_a_bound_of_zero_takes_its_precision_from_the_other_end() -> None:
+    """0 has no magnitude of its own, and must not drag the pair down to `0-0.4`."""
+    assert format_range(0.0, 0.4295) == "0.00-0.43"
+    assert format_range(0.0, 0.0) == "0.0-0.0"
+
+
+def test_a_bound_near_zero_stops_at_the_decimal_cap() -> None:
+    """A run of zeros is not more informative than the cap, and is less readable."""
+    printed = format_range(0.0000001, 0.5)
+    assert len(printed.split("-")[0].split(".")[1]) <= 6
 
 
 def test_neutral_facts_get_a_symmetric_interval() -> None:
