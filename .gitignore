@@ -7,6 +7,12 @@ __pycache__/
 .DS_Store
 .ruff_cache/
 
+# Declared historical roots are machine-local: they name directories that exist (or existed)
+# on ONE filesystem, and a root that is right here is wrong on a colleague's checkout. The
+# file is also a claim about where this repo has lived, which is a thing each machine's owner
+# should make for themselves — `vouch identity --propose` proposes, a human decides.
+.vouch/identity.yaml
+
 # Populated label sets never leave this machine. `eval/labels.yaml` stays tracked and
 # EMPTY as the schema contract (a test enforces that); real labelling happens here.
 eval/labels.local.yaml

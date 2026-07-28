@@ -138,6 +138,48 @@ def test_the_rename_is_data_not_a_rewrite_rule(tmp_path: Path, repo: Path) -> No
     )
 
 
+def test_a_declared_root_may_be_written_relative_to_the_repo(
+    tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """`../OldName` — the form a rename in place actually takes, and portable.
+
+    An absolute declaration records the machine that wrote it: `/Users/somebody/...` is
+    one person's home directory stored as though it were a property of the repository, and
+    it stops being true the moment the checkout moves.
+    """
+    old_root = repo.parent / "OldName"
+    # The CLI is running somewhere else entirely, as it usually is. The base is the repo.
+    monkeypatch.chdir(tmp_path)
+
+    identity = resolve_identity(repo, declared=[HistoricalRoot(path="../OldName")])
+
+    assert identity.relativize(str(old_root / "src/a.py"), None) == (
+        PathOutcome.IN_REPO,
+        "src/a.py",
+    )
+
+
+def test_a_relative_declaration_is_not_resolved_against_the_process_cwd(
+    tmp_path: Path, repo: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """Otherwise the same declaration means a different directory per invocation.
+
+    The same defect as a session path resolved against the CLI's working directory, one
+    layer up: it would silently admit whatever happened to sit beside wherever the command
+    was run from.
+    """
+    elsewhere = tmp_path / "elsewhere"
+    (elsewhere / "OldName").mkdir(parents=True)
+    monkeypatch.chdir(elsewhere)
+
+    identity = resolve_identity(repo, declared=[HistoricalRoot(path="OldName")])
+
+    assert identity.relativize(str(elsewhere / "OldName" / "src/a.py"), None) == (
+        PathOutcome.OUTSIDE,
+        None,
+    )
+
+
 # --- spelling, symlinks, case ----------------------------------------------------------
 
 

@@ -84,7 +84,19 @@ class PathOutcome(StrEnum):
 
 
 class HistoricalRoot(BaseModel):
-    """One declared previous home of this repo."""
+    """One declared previous home of this repo.
+
+    ``path`` may be written relative to the repo root (`../Aiapp`), from the home directory
+    (`~/Projects/Aiapp`), or absolute. **Relative is the form to prefer**, and it is the same
+    lesson as :meth:`RepoIdentity.relativize`: an absolute path is only meaningful on the
+    machine that produced it, and `/Users/admin/Projects/Aiapp` in a declaration file records
+    one person's home directory as though it were a property of the repository. A rename
+    almost always happens beside the repo, so `../Aiapp` says what actually happened and
+    keeps saying it after the checkout moves.
+
+    Absolute is still accepted, because a repo that moved between volumes is a real case
+    that no relative path can express.
+    """
 
     model_config = ConfigDict(extra="forbid")
 
@@ -122,6 +134,20 @@ def _real(path: str | Path) -> str:
     stats the whole path; ``os.path.realpath`` resolves what it can and normalizes the rest.
     """
     return os.path.realpath(os.path.abspath(str(path)))
+
+
+def _declared_root(repo_root: Path, raw: str) -> str:
+    """Resolve one declared historical root against the repo, never against the process.
+
+    The base is the repo root, which is the only base that means the same thing in every
+    process that reads the file. Resolving a relative declaration against the CLI's working
+    directory is the defect this module already carries a long note about, one layer down:
+    a path is then a different path depending on where the command was run from.
+    """
+    expanded = os.path.expanduser(raw)
+    if os.path.isabs(expanded):
+        return _real(expanded)
+    return _real(Path(repo_root) / expanded)
 
 
 def history_paths(repo_path: Path) -> frozenset[str]:
@@ -260,12 +286,15 @@ def resolve_identity(
     hist_keys: list[str] = []
     hist_display: list[str] = []
     for root in declared:
-        k = key(_real(root.path))
+        # Resolved against the canonical root, so `../Aiapp` means the sibling of THIS repo
+        # wherever the checkout now sits.
+        resolved = _declared_root(canonical, root.path)
+        k = key(resolved)
         if k in seen:
             continue  # the canonical root, spelled differently. Not an error.
         seen.add(k)
         hist_keys.append(k)
-        hist_display.append(_real(root.path))
+        hist_display.append(resolved)
 
     paths = known_paths
     if paths is None:
