@@ -27,7 +27,8 @@ from vouch.eval.corpus import (
 )
 
 DEPENDABOT = ("dependabot[bot]", "49699333+dependabot[bot]@users.noreply.github.com")
-CORPUS_PATH = Path(__file__).resolve().parents[1] / "eval" / "repos.yaml"
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CORPUS_PATH = REPO_ROOT / "eval" / "repos.yaml"
 
 # Any address-shaped token. Deliberately broad: the point is to catch a slip, not to parse
 # RFC 5322.
@@ -169,6 +170,35 @@ def test_every_committed_row_is_loadable() -> None:
     corpus = load_corpus(CORPUS_PATH)
     assert len(corpus.repos) == 12
     assert all(spec.author.by == "commit_rank" for spec in corpus.repos)
+
+
+def test_every_test_named_in_the_privacy_note_exists() -> None:
+    """`notes.privacy` cites tests instead of asserting a state. The citations must resolve.
+
+    A note that asserts "no address is anywhere in this history" is true the day it is
+    written and unfalsifiable afterwards. Citing the check that enforces it is better only
+    if the citation is kept honest — a reference to a test somebody deleted is worse than
+    the assertion it replaced, because it reads as verified.
+    """
+    note = yaml.safe_load(CORPUS_PATH.read_text())["notes"]["privacy"]
+
+    # `path::test_x`, `path::Class::test_x`, and the `...::test_x` shorthand, which carries
+    # the previously named file forward exactly as it reads.
+    cited, current = [], None
+    for path, name in re.findall(
+        r"(tests/\S+?\.py|\.\.\.)::(?:\w+::)?(test_\w+)", note
+    ):
+        current = path if path != "..." else current
+        assert current is not None, f"'...' shorthand before any file was named: {name}"
+        cited.append((current, name))
+
+    assert len(cited) >= 10, f"the privacy note cites only {len(cited)} tests"
+    missing = [
+        f"{path}::{name}"
+        for path, name in cited
+        if f"def {name}(" not in (REPO_ROOT / path).read_text()
+    ]
+    assert not missing, f"notes.privacy cites tests that do not exist: {missing}"
 
 
 def test_the_target_shape_axis_is_present_and_paired() -> None:

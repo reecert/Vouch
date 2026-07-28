@@ -295,6 +295,23 @@ class TestLabelPrivacy:
         assert "repo" not in fields
         assert "corpus_id" in fields
 
+    def test_a_field_the_schema_does_not_declare_is_rejected(self) -> None:
+        """The first of the three enforcements, and the one with no test until now.
+
+        `extra="forbid"` is what stops a hand-edited label from growing an `author:` back.
+        Without it the loader's address scan would be the only line of defence, and a
+        `users.noreply` address would sail through it.
+        """
+        with pytest.raises(ValidationError, match="[Ee]xtra"):
+            DimensionLabel(
+                corpus_id="hunter",
+                dimension=DimensionKey.OWNERSHIP,
+                verdict=Verdict.STRONG,
+                reason="returns to their own defects with tests",
+                leaned_on=["ownership_loop"],
+                author="somebody",
+            )
+
     def test_an_address_as_a_corpus_id_is_rejected(self) -> None:
         with pytest.raises(ValidationError, match="email address"):
             DimensionLabel(

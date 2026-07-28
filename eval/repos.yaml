@@ -589,8 +589,36 @@ notes:
     through between labels.
 
   privacy: >
-    SETTLED before this file was first committed, so no third-party address is anywhere in
-    this repository's history. An earlier draft stored the ten addresses inline and flagged
+    EVERY CLAIM IN THIS NOTE NAMES THE TEST THAT CHECKS IT. A note that asserts a state
+    ("no address is anywhere in this history") is true on the day it is written and
+    unfalsifiable afterwards — the file cannot notice when it stops being true, and a reader
+    has no way to tell a live guarantee from a stale one. What follows are pointers to
+    executable checks; if one is deleted, CI is what says so.
+    THE GUARANTEES, AND WHERE THEY LIVE:
+    (a) no address in this corpus file —
+    `tests/test_eval_corpus.py::test_the_committed_corpus_contains_no_address`;
+    (b) no address in the label file —
+    `tests/test_eval.py::TestLabelPrivacy::test_the_shipped_label_file_is_clean`;
+    (c) no address in ANY committed blob, ever, not just at HEAD —
+    `tests/test_eval.py::TestLabelPrivacy::test_no_third_party_address_survives_in_any_committed_file`;
+    (d) a label has nowhere to put one —
+    `tests/test_eval.py::TestLabelPrivacy::test_a_label_has_nowhere_to_put_an_address`, and
+    the schema rejects a field it does not declare —
+    `...::test_a_field_the_schema_does_not_declare_is_rejected`;
+    (e) the loader scans the RAW BYTES, so a comment the parser never sees is caught —
+    `tests/test_eval.py::TestLabelPrivacy::test_an_address_in_a_comment_is_rejected`, and in
+    a `reason` — `...::test_an_address_hidden_in_a_reason_is_rejected`;
+    (f) `vouch label` runs that validator BEFORE the write, so the mistake costs one retyped
+    line rather than a hand-edit mid-round —
+    `tests/test_cli.py::test_label_catches_an_address_in_a_reason_before_it_is_written`;
+    (g) populated label sets cannot be committed by accident —
+    `tests/test_eval.py::TestLabelValidation::test_a_local_label_set_cannot_be_committed_by_accident`,
+    and the tracked file stays empty — `...::test_repo_label_file_is_valid_and_still_empty`;
+    (h) the selector fails loudly rather than silently profiling a different person if the
+    ranking shifts — `tests/test_eval_corpus.py::test_rank_and_digest_disagreeing_is_fatal`,
+    and its error text prints no address — `...::test_error_text_never_prints_an_address`.
+    HOW IT WAS SETTLED, which is history and not a guarantee:
+    an earlier draft stored the ten addresses inline and flagged
     the problem for a decision; the decision is a runtime resolver. Each row carries a
     selector — `commit_rank` at the pinned head, guarded by `email_sha256` — and
     `vouch.eval.corpus.resolve_author` reads the address out of the clone when the pipeline
@@ -612,14 +640,9 @@ notes:
     discipline of whoever fills the file in. The CLI resolving through this file was the
     weaker option: it removes the address from the write path but leaves the field, and the
     next person to hand-edit a label puts it back. THREE ENFORCEMENTS, not one, because a
-    `reason` is free text a human types and is exactly where an address slips in: (1) the
-    model forbids extra fields; (2) `load_labels` scans the RAW BYTES of the file before
-    parsing and refuses to load if anything email-shaped appears anywhere, including in a
-    comment, which the parser never sees; (3) `vouch label` runs the same validator BEFORE
-    the write, so the mistake costs one retyped line rather than a hand-edit of a
-    half-written file mid-round. Populated label sets are gitignored (`labels.local.yaml`);
-    the tracked `labels.yaml` stays empty as the schema contract and a test keeps it that
-    way. The cost, stated: a label no longer says who it is about, so reading the corpus and
+    `reason` is free text a human types and is exactly where an address slips in — they are
+    (d), (e) and (f) above, and each is named there by the test that holds it up rather than
+    asserted here. The cost, stated: a label no longer says who it is about, so reading the corpus and
     the labels together tells you the judgement but not the person, and re-deriving that
     needs a clone — the same trade this note already accepted for the selector.
 
