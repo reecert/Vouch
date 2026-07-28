@@ -54,6 +54,8 @@ from vouch.eval.labels import LabelProvenance
 from vouch.l1.cache import EXTRACTOR_VERSION
 from vouch.l1.config import L1_CONFIG
 from vouch.l1.facts import FactStatus, RepoFacts
+from vouch.l1.interval import Polarity
+from vouch.l2.metrics import METRIC_POLARITY
 from vouch.l2.payload import MetricKey, SessionMetrics
 from vouch.l3.join import CorroborationReport
 from vouch.l4.dimensions import DIMENSIONS, DimensionSpec, assess_availability
@@ -125,10 +127,34 @@ def assign_split(corpus_id: str, dimension: DimensionKey) -> str:
     return "holdout" if fraction < SPLIT_HOLDOUT_SHARE else "train"
 
 
+#: How each polarity reads to a human. `neutral` is spelled out rather than left blank: a
+#: missing note is indistinguishable from a forgotten one, and `commit_scoping` genuinely
+#: has no better direction — small commits are focused or trivial, large ones thorough or
+#: sprawling.
+_DIRECTION = {
+    Polarity.HIGHER_IS_BETTER: "higher is better",
+    Polarity.LOWER_IS_BETTER: "lower is better",
+    Polarity.NEUTRAL: "neither direction is better",
+}
+
+
 def _band(low: float | None, high: float | None, unit: str) -> str:
     if low is None or high is None:
         return "no interval"
     return f"{low:g}-{high:g}{unit}"
+
+
+def _direction(polarity: Polarity) -> str:
+    """Which way to read the number that precedes this.
+
+    Direction travels with every measure because without it the measure is not
+    interpretable: `followup_latency: 92 days` is a complaint or a compliment depending on
+    an answer the labeller was never shown, and they will supply one from intuition if the
+    render does not. It is also the asymmetry the interval itself was drawn on — the end
+    that would read badly for the subject was held to the stricter confidence level — so a
+    reader who does not know the direction cannot know which end was made harder to reach.
+    """
+    return f"  [{_DIRECTION[polarity]}]"
 
 
 def _fact_line(facts: RepoFacts, key: str) -> str:
@@ -147,10 +173,11 @@ def _fact_line(facts: RepoFacts, key: str) -> str:
         interval.low if interval else None, interval.high if interval else None, unit
     )
 
+    way = _direction(fact.polarity)
     if fact.status is FactStatus.MEASURED:
-        return f"  {key}: {band}  (point estimate {fact.value}{unit}, from {denom})"
+        return f"  {key}: {band}  (point estimate {fact.value}{unit}, from {denom}){way}"
     if fact.status is FactStatus.SUPPRESSED_LOW_N:
-        return f"  {key}: {band} from {denom} — too thin for a point estimate"
+        return f"  {key}: {band} from {denom} — too thin for a point estimate{way}"
     return f"  {key}: not assessable — {fact.note}"
 
 
@@ -176,12 +203,13 @@ def _metric_line(metrics: SessionMetrics | None, key: MetricKey) -> str:
 
     band = _band(rate.low, rate.high, "")
     denom = f"{rate.numerator}/{rate.denominator}"
+    way = _direction(METRIC_POLARITY[key])
     if rate.suppressed:
         return (
             f"  {key.value}: {band} from {denom} — {rate.denominator} observation(s) is "
-            f"under the floor of {rate.floor}, so there is no point estimate"
+            f"under the floor of {rate.floor}, so there is no point estimate{way}"
         )
-    return f"  {key.value}: {band}  (point estimate {rate.value}, from {denom})"
+    return f"  {key.value}: {band}  (point estimate {rate.value}, from {denom}){way}"
 
 
 def build_task(

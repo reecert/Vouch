@@ -173,6 +173,39 @@ def test_a_suppressed_metric_shows_its_floor_not_a_silence(facts) -> None:
     assert "no point estimate" in line
 
 
+def test_every_measure_states_which_way_to_read_it(facts) -> None:
+    """`followup_latency: 92 days` is a complaint or a compliment. The render must say.
+
+    The direction is also the asymmetry the interval was drawn on — the unfavourable end
+    is held to the stricter confidence level — so a labeller who does not know it cannot
+    know which end was made harder to reach.
+    """
+    for spec in DIMENSIONS:
+        task = build_task(spec, "row", facts, _METRICS)
+        measures = [
+            line
+            for line in (*task.evidence, *task.session)
+            if "point estimate" in line or "too thin" in line
+        ]
+        assert measures, f"{spec.key.value} renders no measure at all"
+        assert all("better]" in line for line in measures), measures
+
+
+def test_a_days_fact_says_lower_is_better(facts) -> None:
+    task = build_task(_spec(DimensionKey.OWNERSHIP), "row", facts)
+    line = next(line for line in task.evidence if "followup_latency" in line)
+
+    assert "days" in line and "[lower is better]" in line
+
+
+def test_a_fact_with_no_better_direction_says_so_rather_than_going_quiet(facts) -> None:
+    """A blank is indistinguishable from a forgotten one. `commit_scoping` has no polarity."""
+    task = build_task(_spec(DimensionKey.SCOPE_CONTROL), "row", facts)
+    line = next(line for line in task.evidence if "commit_scoping" in line)
+
+    assert "[neither direction is better]" in line
+
+
 def test_confounds_are_shown_with_their_direction(tmp_path: Path) -> None:
     repo = tmp_path / "solo"
     repos.solo(repo)

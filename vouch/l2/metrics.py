@@ -24,7 +24,28 @@ from vouch.l2.payload import (
     bucket_for,
 )
 
-__all__ = ["L2MinN", "L2_MIN_N", "derive_metrics"]
+__all__ = ["L2MinN", "L2_MIN_N", "METRIC_POLARITY", "derive_metrics"]
+
+
+#: Which direction of each metric is the unfavourable one for the person being profiled.
+#:
+#: Declared here, once, rather than passed at each `_rate` call: the polarity decides which
+#: end of the interval was held to the strict confidence level, so anything that *renders* a
+#: metric has to be able to state it. "92 days" says nothing on its own — a reader cannot
+#: tell whether it is a complaint or a compliment — and the number was drawn asymmetrically
+#: on the strength of an answer the reader was never shown.
+#:
+#: `EDIT_REVISION` is deliberately not neutral: revisiting a file within a session is the
+#: measurable half of revision-before-acceptance, so more of it reads as better here. That
+#: is a modelling claim, and stating it in one place is what makes it arguable.
+METRIC_POLARITY: dict[MetricKey, Polarity] = {
+    MetricKey.PLAN_BEFORE_EXECUTE: Polarity.HIGHER_IS_BETTER,
+    MetricKey.TEST_OR_BUILD_AFTER_EDIT: Polarity.HIGHER_IS_BETTER,
+    MetricKey.EDIT_REVISION: Polarity.HIGHER_IS_BETTER,
+    # Neither direction is a claim about the person: a human who redirects is engaged, and
+    # one who does not may be either trusting or absent.
+    MetricKey.HUMAN_REDIRECT: Polarity.NEUTRAL,
+}
 
 
 @dataclass(frozen=True)
@@ -43,7 +64,7 @@ def _rate(
     numerator: int,
     denominator: int,
     floor: int,
-    polarity: Polarity = Polarity.HIGHER_IS_BETTER,
+    key: MetricKey,
 ) -> Rate:
     """A rate whose *point estimate* is suppressed below its floor, and always at zero n.
 
@@ -55,7 +76,7 @@ def _rate(
     reader with silence where there was something honest to say.
     """
     suppressed = denominator == 0 or denominator < floor
-    interval = asymmetric_interval(numerator, denominator, polarity)
+    interval = asymmetric_interval(numerator, denominator, METRIC_POLARITY[key])
     return Rate(
         numerator=numerator,
         denominator=denominator,
@@ -233,16 +254,19 @@ def derive_metrics(
         window_first=min(starts).date() if starts else None,
         window_last=max(ends).date() if ends else None,
         rates={
-            MetricKey.PLAN_BEFORE_EXECUTE: _rate(plan_n, plan_d, min_n.sessions),
-            MetricKey.TEST_OR_BUILD_AFTER_EDIT: _rate(
-                verify_n, verify_d, min_n.edit_runs
+            # Polarity comes from METRIC_POLARITY rather than from these call sites, so the
+            # direction a renderer states is necessarily the one the interval was drawn on.
+            MetricKey.PLAN_BEFORE_EXECUTE: _rate(
+                plan_n, plan_d, min_n.sessions, MetricKey.PLAN_BEFORE_EXECUTE
             ),
-            MetricKey.EDIT_REVISION: _rate(revise_n, revise_d, min_n.edited_files),
-            # Neither direction of `human_redirect` is a claim about the person: a
-            # human who redirects is engaged, and one who does not may be either
-            # trusting or absent. Neutral polarity, so its interval is symmetric.
+            MetricKey.TEST_OR_BUILD_AFTER_EDIT: _rate(
+                verify_n, verify_d, min_n.edit_runs, MetricKey.TEST_OR_BUILD_AFTER_EDIT
+            ),
+            MetricKey.EDIT_REVISION: _rate(
+                revise_n, revise_d, min_n.edited_files, MetricKey.EDIT_REVISION
+            ),
             MetricKey.HUMAN_REDIRECT: _rate(
-                redirect_n, redirect_d, min_n.sessions, Polarity.NEUTRAL
+                redirect_n, redirect_d, min_n.sessions, MetricKey.HUMAN_REDIRECT
             ),
         },
         tool_usage=dict(sorted(tools.items())),
