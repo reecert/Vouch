@@ -32,6 +32,10 @@ jobs:
         python-version: ["3.12", "3.13"]
     steps:
       - uses: actions/checkout@v4
+        with:
+          # The privacy test scans every blob ever committed; at the default depth of 1
+          # it would scan one commit and pass on a history carrying a leaked address.
+          fetch-depth: 0
       - uses: actions/setup-python@v5
         with:
           python-version: ${{ matrix.python-version }}
