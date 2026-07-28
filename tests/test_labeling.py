@@ -11,8 +11,10 @@ weight, and each has a test:
 """
 from __future__ import annotations
 
+import hashlib
 import inspect
 import re
+from datetime import date
 from pathlib import Path
 
 import pytest
@@ -21,6 +23,7 @@ import yaml
 from tests.fixtures import repos
 from vouch.eval import labeling
 from vouch.eval.labeling import (
+    RENDER_VERSION,
     SPLIT_HOLDOUT_SHARE,
     append_label,
     assign_split,
@@ -32,6 +35,19 @@ from vouch.eval.labeling import (
 from vouch.eval.labels import LabelProvenance, LabelValidationError, load_labels
 from vouch.ingest import ingest
 from vouch.l1.extract import extract_facts
+from vouch.l1.facts import (
+    BiasDirection,
+    Confound,
+    ConfoundKey,
+    Fact,
+    FactStatus,
+    Identity,
+    Interval,
+    Polarity,
+    RepoFacts,
+    Severity,
+    Unit,
+)
 from vouch.l2.payload import MetricKey, MetricScope, Rate, SessionMetrics
 from vouch.l4.dimensions import DIMENSIONS
 from vouch.l4.schema import DimensionKey, Verdict
@@ -48,6 +64,58 @@ _METRICS = SessionMetrics(
         for key in MetricKey
     },
 )
+
+
+#: Facts written out by hand rather than extracted, so the render digest below depends on
+#: the render alone. Extracting them would make an extractor change look like a render
+#: change, and `extractor_version` already covers that.
+_RENDER_FIXTURE = RepoFacts(
+    repo="fixture",
+    head_sha="a" * 40,
+    subject=Identity(canonical_email=SUBJECT),
+    window_first=date(2024, 1, 1),
+    window_last=date(2024, 6, 30),
+    n_commits_by_subject=45,
+    n_commits_total=900,
+    facts=[
+        Fact(
+            key="test_accompanies_fix", status=FactStatus.MEASURED, value=0.0,
+            polarity=Polarity.HIGHER_IS_BETTER, numerator=0, denominator=5,
+            interval=Interval(low=0.0, high=0.4295, low_level=0.8, high_level=0.95),
+        ),
+        Fact(
+            key="ownership_loop", status=FactStatus.NOT_ASSESSABLE,
+            polarity=Polarity.HIGHER_IS_BETTER,
+            note="a solo repo has nobody else's defect to return to",
+        ),
+        Fact(
+            key="followup_latency", status=FactStatus.SUPPRESSED_LOW_N, unit=Unit.DAYS,
+            polarity=Polarity.LOWER_IS_BETTER, denominator=2,
+            interval=Interval(low=2.0, high=91.0, low_level=0.95, high_level=0.8),
+        ),
+        Fact(
+            key="revert_rate", status=FactStatus.MEASURED, value=0.0385,
+            polarity=Polarity.LOWER_IS_BETTER, numerator=1, denominator=26,
+            interval=Interval(low=0.0003, high=0.005, low_level=0.95, high_level=0.8),
+        ),
+        Fact(
+            key="commit_scoping", status=FactStatus.MEASURED, value=4.0, unit=Unit.FILES,
+            polarity=Polarity.NEUTRAL, denominator=45,
+            interval=Interval(low=2.0, high=2.0, low_level=0.95, high_level=0.95,
+                              method="order-statistic"),
+        ),
+    ],
+    confounds=[
+        Confound(
+            key=ConfoundKey.SOLO_REPO, severity=Severity.INVALIDATING,
+            direction=BiasDirection.OVERSTATES, detail="98% of human commits",
+            affects=["ownership_loop"],
+        )
+    ],
+)
+
+#: Bump with RENDER_VERSION. See test_the_render_version_tracks_what_is_actually_on_screen.
+_RENDER_DIGEST = "6d3ec1ded6ea943f"
 
 
 @pytest.fixture
@@ -349,7 +417,10 @@ def test_a_written_label_reloads_through_the_validator(tmp_path: Path) -> None:
 # --- provenance: naming the code the judgement was made against -----------------------------
 
 _PROV = LabelProvenance(
-    code_sha="0123456789abcdef", extractor_version="l1-extract/2", l1_config="abc123def456"
+    code_sha="0123456789abcdef",
+    extractor_version="l1-extract/2",
+    l1_config="abc123def456",
+    render_version="label-render/1",
 )
 
 
@@ -430,8 +501,44 @@ def test_provenance_reads_this_repo(tmp_path: Path) -> None:
 
     assert len(prov.code_sha) == 40, "not a resolved git sha"
     assert prov.extractor_version and prov.l1_config
-    # A label does not depend on how the judge is prompted, so there is no field for it.
+    assert prov.render_version == RENDER_VERSION
+    # A label does not depend on how the JUDGE is prompted, so there is still no field for
+    # that. `render_version` is the other thing entirely: what the human was shown.
     assert "prompt_version" not in LabelProvenance.model_fields
+
+
+def test_a_render_change_mid_round_is_refused_like_an_extractor_bump(tmp_path: Path) -> None:
+    """The missing-L2 bug is the proof: the render decides what a label means.
+
+    Labels made under two renderers answer different questions while carrying an identical
+    extractor version and an identical config, so nothing else in this stamp could catch it.
+    """
+    path = tmp_path / "labels.yaml"
+    path.write_text("train: []\nholdout: []\n")
+    _write(path, _PROV)
+
+    with pytest.raises(ValueError, match="render_version"):
+        _write(path, _PROV.model_copy(update={"render_version": "label-render/2"}), "svcs")
+
+
+def test_the_render_version_tracks_what_is_actually_on_screen() -> None:
+    """A version nobody remembers to bump is worse than none — it asserts a false sameness.
+
+    The digest is over the rendered text for a fixed set of facts, so any change to what a
+    labeller reads — a number's format, a section heading, a sentence of guidance — fails
+    here until `RENDER_VERSION` moves with it.
+    """
+    rendered = "\n".join(
+        render_task(build_task(spec, "row", _RENDER_FIXTURE, _METRICS))
+        for spec in DIMENSIONS
+    )
+    digest = hashlib.sha256(rendered.encode()).hexdigest()[:16]
+
+    assert digest == _RENDER_DIGEST, (
+        f"the labelling render changed (digest {digest}). If that was deliberate, bump "
+        "RENDER_VERSION in vouch/eval/labeling.py and this digest together — labels made "
+        "under the old renderer are not comparable with labels made under the new one."
+    )
 
 
 def test_a_reason_carrying_an_address_fails_on_reload(tmp_path: Path) -> None:

@@ -64,6 +64,7 @@ from vouch.l4.schema import DimensionKey, Verdict
 __all__ = [
     "SPLIT_HOLDOUT_SHARE",
     "JUDGEABLE_VERDICTS",
+    "RENDER_VERSION",
     "LabelTask",
     "assign_split",
     "build_task",
@@ -86,6 +87,22 @@ SPLIT_HOLDOUT_SHARE = 1 / 3
 JUDGEABLE_VERDICTS: tuple[Verdict, ...] = tuple(
     v for v in Verdict if v not in (Verdict.NOT_COLLECTED, Verdict.OUT_OF_SCOPE)
 )
+
+#: What drew the screen the labeller read. Stamped on a label set and refused if it moves
+#: mid-round, exactly as the extractor version is.
+#:
+#: This exists because of a measured failure, not on principle: the harness rendered a
+#: dimension's L1 facts and dropped its L2 metrics, so labels made before that fix answer a
+#: narrower question than labels made after it — while `extractor_version` and `l1_config`
+#: stayed identical, because neither the numbers nor the config had changed. The rendering
+#: is part of what a label is a judgement of.
+#:
+#: **Bump this whenever what appears on screen changes**, including wording. `1` is the
+#: first version that renders both layers, states polarity, formats intervals at a fixed
+#: precision, and forces the verdict where availability settles it — i.e. nothing labelled
+#: before this commit was labelled against it. ``tests/test_labeling.py`` pins the rendered
+#: output against a digest so that changing the render without bumping this fails.
+RENDER_VERSION = "label-render/1"
 
 
 @dataclass
@@ -362,6 +379,7 @@ def current_provenance(repo_root: Path | None = None) -> LabelProvenance:
         dirty=bool(git("status", "--porcelain", "--untracked-files=no")),
         extractor_version=EXTRACTOR_VERSION,
         l1_config=L1_CONFIG.fingerprint(),
+        render_version=RENDER_VERSION,
     )
 
 
@@ -388,9 +406,9 @@ def append_label(
     label belongs to whichever the split assigned — not to whichever happens to be last.
 
     ``provenance`` is stamped on the first write and **checked** on every one after. If the
-    extractor version or the L1 config has moved mid-round, the labels already in the file
-    were made against numbers that no longer render, and mixing the two silently would give
-    a pool whose rows answer subtly different questions. Refusing is the point.
+    extractor version, the L1 config or the renderer has moved mid-round, the labels already
+    in the file were made against a screen that no longer exists, and mixing the two silently
+    would give a pool whose rows answer subtly different questions. Refusing is the point.
     """
     raw = yaml.safe_load(path.read_text()) if path.is_file() else None
     data = raw if isinstance(raw, dict) else {}

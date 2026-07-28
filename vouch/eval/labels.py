@@ -104,12 +104,24 @@ class LabelProvenance(BaseModel):
     A calibration result that cannot name the code it measured is not a result. ``code_sha``
     is the record a reader can go and check out.
 
-    ``extractor_version`` and ``l1_config`` matter for a different and sharper reason: they
-    decide whether labels still *apply*. A label is a human's judgement of the evidence they
-    were shown, and those two are what determine the numbers on the screen. Bump either one
-    and the same corpus row renders differently — so the existing labels were made against
-    a rendering that no longer exists, and carrying them forward silently would score the
-    judge against ground truth for a different question.
+    ``extractor_version``, ``l1_config`` and ``render_version`` matter for a different and
+    sharper reason: they decide whether labels still *apply*. A label is a human's judgement
+    of the evidence they were shown, and those three are what determine what was on the
+    screen. Bump any of them and the same corpus row renders differently — so the existing
+    labels were made against a rendering that no longer exists, and carrying them forward
+    silently would score the judge against ground truth for a different question.
+
+    ``render_version`` REVERSES an earlier decision recorded here, which was that no
+    rendering version belonged in this file because a label is a reading of the evidence and
+    not of any prompt. The evidence for the reversal is a bug: the harness rendered a
+    dimension's L1 facts and silently dropped its L2 metrics, so labels made before that fix
+    answer a materially narrower question than labels made after it — with an identical
+    ``extractor_version`` and an identical ``l1_config``, because neither the numbers nor the
+    config changed. The rendering is part of what a label is a judgement of, and nothing else
+    here was able to say so.
+
+    There is still deliberately no ``prompt_version``: how the *judge* is prompted has no
+    bearing on what a human was shown. The eval run records that, which is where it belongs.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -118,15 +130,13 @@ class LabelProvenance(BaseModel):
     dirty: bool = False  # labelled against uncommitted changes; the sha does not describe it
     extractor_version: str = ""
     l1_config: str = ""
-    # Deliberately no `prompt_version`. A label is a human's reading of L1 evidence and does
-    # not depend on how the judge is prompted; recording it here would imply otherwise. The
-    # eval run records it, which is where it belongs.
+    render_version: str = ""  # the harness that drew the screen the labeller read
 
     def differs_from(self, other: LabelProvenance) -> list[str]:
         """Which fields would change what a labeller was shown. Empty means compatible."""
         return [
             name
-            for name in ("extractor_version", "l1_config")
+            for name in ("extractor_version", "l1_config", "render_version")
             if getattr(self, name) and getattr(other, name)
             and getattr(self, name) != getattr(other, name)
         ]

@@ -41,13 +41,16 @@
 # The stamp that matters is not this one. `vouch label` writes the real provenance into
 # `labels.local.yaml` at the first write of a round, and `load_labels` refuses any file
 # that carries labels without it, so an unattributable label set cannot be loaded at all.
-# `extractor_version` and `l1_config` are the two that decide whether existing labels still
-# APPLY: both change the numbers rendered to the labeller, so bumping either mid-round is
-# refused rather than warned about.
+# `extractor_version`, `l1_config` and `render_version` are the three that decide whether
+# existing labels still APPLY: each changes what is rendered to the labeller, so bumping any
+# of them mid-round is refused rather than warned about. `render_version` was added after a
+# rendering bug proved the point — see notes.reversal_render_version_is_provenance in
+# repos.yaml.
 metadata:
   code_sha: 54d3a97704af72c7ac82bdd4c1152d4acbcf6023
   dirty: false
   extractor_version: l1-extract/2
   l1_config: ""       # stamped per round from L1Config.fingerprint(); no round has run
+  render_version: label-render/1
 train: []
 holdout: []
