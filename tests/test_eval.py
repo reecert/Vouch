@@ -161,6 +161,23 @@ class TestLabelValidation:
             "one `git add .` away from a public repository."
         )
 
+    def test_the_declared_baseline_still_resolves(self) -> None:
+        """`code_sha` is only checked for being non-empty, which a dead sha satisfies.
+
+        The declaration is worth exactly what it can be checked out at, and a sha does not
+        survive its history being rewritten. One `pull --rebase` orphaned this field once
+        already, silently, because presence was the only property anything asserted.
+        """
+        declared = load_labels(REPO_ROOT / "eval" / "labels.yaml").metadata.code_sha
+        reachable = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "merge-base", "--is-ancestor", declared, "HEAD"],
+        )
+        assert reachable.returncode == 0, (
+            f"eval/labels.yaml declares a baseline of {declared[:12]}, which is not an "
+            "ancestor of HEAD. A corpus that cannot name a checkout-able baseline is not "
+            "calibrated against anything."
+        )
+
 
 class TestRefusals:
     def test_empty_holdout_is_refused(self) -> None:
