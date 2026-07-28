@@ -18,6 +18,15 @@ stops being a holdout.
 `0 of 5` reads as the range it is rather than as a zero — and the confounds that bear on
 it, and then asks. A labeller who has already read "0%" cannot un-read it.
 
+**The whole question, or none of it.** A dimension's question is answered from every layer
+the dimension declares, so the task renders every layer. This is not a tidiness point: the
+harness previously rendered `spec.l1_facts` and silently dropped `spec.l2_metrics`, so
+`verification_discipline` asked "in the commit trail *and while working*?" over commit-trail
+evidence alone, and a label recorded against that answer is ground truth for a narrower
+question than the one the judge is scored on. Where a layer is absent the task says so in
+the layer's own section, rather than omitting the section — an omission reads as "nothing to
+say here", which is a claim, and the wrong one.
+
 `insufficient_evidence` is offered as a first-class answer everywhere, because a corpus of
 only conclusive labels teaches nothing about overclaiming, which is the failure the whole
 quality bar exists to catch.
@@ -35,6 +44,7 @@ from vouch.eval.labels import LabelProvenance
 from vouch.l1.cache import EXTRACTOR_VERSION
 from vouch.l1.config import L1_CONFIG
 from vouch.l1.facts import FactStatus, RepoFacts
+from vouch.l2.payload import MetricKey, SessionMetrics
 from vouch.l3.join import CorroborationReport
 from vouch.l4.dimensions import DIMENSIONS, DimensionSpec
 from vouch.l4.schema import DimensionKey, Verdict
@@ -67,6 +77,9 @@ class LabelTask:
     title: str
     question: str
     evidence: list[str] = field(default_factory=list)
+    #: The session-trail half. Kept separate from ``evidence`` rather than concatenated so
+    #: that a dimension reading from both layers cannot render as though it read from one.
+    session: list[str] = field(default_factory=list)
     confounds: list[str] = field(default_factory=list)
     corroboration: list[str] = field(default_factory=list)
     permitted: tuple[Verdict, ...] = tuple(Verdict)
@@ -85,6 +98,12 @@ def assign_split(corpus_id: str, dimension: DimensionKey) -> str:
     return "holdout" if fraction < SPLIT_HOLDOUT_SHARE else "train"
 
 
+def _band(low: float | None, high: float | None, unit: str) -> str:
+    if low is None or high is None:
+        return "no interval"
+    return f"{low:g}-{high:g}{unit}"
+
+
 def _fact_line(facts: RepoFacts, key: str) -> str:
     fact = facts.fact(key)
     if fact is None:
@@ -96,10 +115,10 @@ def _fact_line(facts: RepoFacts, key: str) -> str:
         if fact.numerator is not None
         else f"{fact.denominator} observation(s)"
     )
-    if fact.interval is not None:
-        band = f"{fact.interval.low:g}-{fact.interval.high:g}{unit}"
-    else:
-        band = "no interval"
+    interval = fact.interval
+    band = _band(
+        interval.low if interval else None, interval.high if interval else None, unit
+    )
 
     if fact.status is FactStatus.MEASURED:
         return f"  {key}: {band}  (point estimate {fact.value}{unit}, from {denom})"
@@ -108,17 +127,53 @@ def _fact_line(facts: RepoFacts, key: str) -> str:
     return f"  {key}: not assessable — {fact.note}"
 
 
+def _metric_line(metrics: SessionMetrics | None, key: MetricKey) -> str:
+    """One L2 metric, or a plain statement of why there is no number for it.
+
+    The absent cases are spelled out rather than skipped. `plan_before_execute` missing
+    because the CLI was never run and `plan_before_execute` missing because five sessions
+    were not enough to divide by are different facts about this subject, and a labeller who
+    is shown neither line cannot tell which one they are looking at.
+    """
+    if metrics is None:
+        return f"  {key.value}: no session telemetry was supplied for this row"
+    if metrics.degraded:
+        return (
+            f"  {key.value}: session telemetry was supplied but could not be read "
+            f"({metrics.degraded_reason.value})"
+        )
+
+    rate = metrics.rates.get(key)
+    if rate is None:
+        return f"  {key.value}: not computed"
+
+    band = _band(rate.low, rate.high, "")
+    denom = f"{rate.numerator}/{rate.denominator}"
+    if rate.suppressed:
+        return (
+            f"  {key.value}: {band} from {denom} — {rate.denominator} observation(s) is "
+            f"under the floor of {rate.floor}, so there is no point estimate"
+        )
+    return f"  {key.value}: {band}  (point estimate {rate.value}, from {denom})"
+
+
 def build_task(
     spec: DimensionSpec,
     corpus_id: str,
     facts: RepoFacts,
+    metrics: SessionMetrics | None = None,
     corroboration: CorroborationReport | None = None,
 ) -> LabelTask:
     """Assemble one blind labelling task.
 
-    Takes `RepoFacts` and a `CorroborationReport` — L1 and L3, and nothing else. There is
-    deliberately no parameter an L4 finding could arrive through, so "just show the
-    labeller what the model said" is not an option a future caller can reach for.
+    Takes `RepoFacts`, `SessionMetrics` and a `CorroborationReport` — L1, L2 and L3, and
+    nothing else. There is deliberately no parameter an L4 finding could arrive through, so
+    "just show the labeller what the model said" is not an option a future caller can reach
+    for.
+
+    ``metrics`` defaults to ``None`` because the common case genuinely has none — the
+    calibration corpus is other people's public repositories, where no session log exists.
+    That is rendered as the absence it is, not passed over.
     """
     evidence = [_fact_line(facts, key) for key in spec.l1_facts]
     if not spec.l1_facts:
@@ -127,6 +182,10 @@ def build_task(
         f"  subject activity: {facts.n_commits_by_subject} of "
         f"{facts.n_commits_total} commits, {facts.window_first} to {facts.window_last}"
     )
+
+    session = [_metric_line(metrics, key) for key in spec.l2_metrics]
+    if not spec.l2_metrics:
+        session = ["  (no session facts feed this dimension)"]
 
     relevant = [c for c in facts.confounds if set(c.affects) & set(spec.l1_facts)]
     confounds = [
@@ -154,6 +213,7 @@ def build_task(
         title=spec.title,
         question=spec.question,
         evidence=evidence,
+        session=session,
         confounds=confounds,
         corroboration=corr,
     )
@@ -166,8 +226,11 @@ def render_task(task: LabelTask) -> str:
         f"{task.corpus_id}  —  {task.title}   [{task.split}]",
         "=" * 78,
         "",
-        "MEASURED",
+        "MEASURED — COMMIT TRAIL",
         *task.evidence,
+        "",
+        "MEASURED — SESSION TRAIL",
+        *task.session,
         "",
         "CONFOUNDS",
         *task.confounds,

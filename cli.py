@@ -424,7 +424,10 @@ def label_(
         if not was_cached:
             typer.echo("(computed L1 fresh; the next pass over this row is instant)", err=True)
 
-        task = build_task(spec, corpus_id, facts_result)
+        # No session telemetry: the corpus is other people's public repositories, and no
+        # log of their working sessions exists on this machine. Passed explicitly so the
+        # task renders that absence in the session section rather than omitting it.
+        task = build_task(spec, corpus_id, facts_result, metrics=None)
         typer.echo(render_task(task))
 
         answer = typer.prompt("verdict (or 'skip', 'quit')").strip()

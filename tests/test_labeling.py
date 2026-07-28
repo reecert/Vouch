@@ -31,10 +31,22 @@ from vouch.eval.labeling import (
 from vouch.eval.labels import LabelProvenance, LabelValidationError, load_labels
 from vouch.ingest import ingest
 from vouch.l1.extract import extract_facts
+from vouch.l2.payload import MetricKey, MetricScope, Rate, SessionMetrics
 from vouch.l4.dimensions import DIMENSIONS
 from vouch.l4.schema import DimensionKey, Verdict
 
 SUBJECT = "alice@example.com"
+
+#: Repo-scoped and unsuppressed, so the rendering of a *present* metric is what is under
+#: test rather than the scope contract that would refuse it.
+_METRICS = SessionMetrics(
+    scope=MetricScope.REPO,
+    n_sessions=20,
+    rates={
+        key: Rate(numerator=8, denominator=20, floor=5, value=0.4, low=0.24, high=0.58)
+        for key in MetricKey
+    },
+)
 
 
 @pytest.fixture
@@ -59,7 +71,7 @@ def test_the_harness_cannot_be_handed_a_judge_result() -> None:
     unprompted — and the eval then measures how persuasive the judge is, not how right.
     """
     params = inspect.signature(build_task).parameters
-    assert set(params) == {"spec", "corpus_id", "facts", "corroboration"}
+    assert set(params) == {"spec", "corpus_id", "facts", "metrics", "corroboration"}
 
     source = inspect.getsource(labeling)
     assert "JudgeResult" not in source
@@ -118,6 +130,47 @@ def test_a_thin_fact_is_shown_as_an_interval_not_a_zero(facts) -> None:
 
     assert "0-0.4" in line.replace(" ", "")
     assert "0/5" in line
+
+
+def test_every_layer_the_question_asks_about_is_rendered(facts) -> None:
+    """The question spans L1 and L2, so the evidence has to.
+
+    The harness rendered `spec.l1_facts` only, so `verification_discipline` — which asks
+    "in the commit trail *and while working*?" — was labelled from the commit trail alone.
+    The label that came back was ground truth for a narrower question than the one the
+    judge is scored on, and nothing on screen said so.
+    """
+    for spec in DIMENSIONS:
+        text = render_task(build_task(spec, "row", facts, _METRICS))
+        missing = [key.value for key in spec.l2_metrics if key.value not in text]
+        assert not missing, f"{spec.key.value} never renders {missing}"
+
+
+def test_an_absent_layer_is_stated_rather_than_omitted(facts) -> None:
+    """Omitting the section reads as "nothing to say here", which is the wrong claim."""
+    spec = _spec(DimensionKey.VERIFICATION_DISCIPLINE)
+    text = render_task(build_task(spec, "row", facts, metrics=None))
+
+    assert "test_or_build_after_edit" in text
+    assert "no session telemetry was supplied" in text
+
+
+def test_a_suppressed_metric_shows_its_floor_not_a_silence(facts) -> None:
+    thin = _METRICS.model_copy(
+        update={
+            "rates": {
+                MetricKey.TEST_OR_BUILD_AFTER_EDIT: Rate(
+                    numerator=1, denominator=2, floor=10, suppressed=True,
+                    low=0.05, high=0.95,
+                )
+            }
+        }
+    )
+    task = build_task(_spec(DimensionKey.VERIFICATION_DISCIPLINE), "row", facts, thin)
+    line = next(line for line in task.session if "test_or_build_after_edit" in line)
+
+    assert "1/2" in line and "floor of 10" in line
+    assert "no point estimate" in line
 
 
 def test_confounds_are_shown_with_their_direction(tmp_path: Path) -> None:
