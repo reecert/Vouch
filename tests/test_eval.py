@@ -426,6 +426,13 @@ class TestLabelPrivacy:
         at its SHA, and still pushed. The history was rewritten; this test is what stops it
         coming back.
 
+        It has already come back once. That first rewrite was never force-pushed, so origin
+        kept the dirty base and a later `pull --rebase` replayed the clean work back on top
+        of it — restoring the address under a passing suite, because CI checks out at the
+        default depth of 1 and this test then has one commit to scan. A rewrite that does
+        not reach origin is not a rewrite, and the full-depth checkout in ci.yml is half of
+        what makes this test mean anything.
+
         Scope is **blob contents** — every version of every file ever committed. Commit
         *metadata* is deliberately out of scope: git cannot record a commit without an
         author address, so the repo owner's own identity is in every commit object by
