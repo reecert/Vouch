@@ -16,6 +16,7 @@ does.
 from __future__ import annotations
 
 from vouch.l1.facts import FactStatus, RepoFacts
+from vouch.l1.interval import format_range
 from vouch.l2.payload import SessionMetrics
 from vouch.l3.join import CorroborationReport
 from vouch.l4.diffs import CommitDiff
@@ -28,7 +29,14 @@ __all__ = ["PROMPT_VERSION", "commit_system", "commit_user", "dimension_system",
 # Bumped at /2 when facts started being presented as intervals rather than point estimates,
 # and at /3 when two verdict names changed. Any calibration measured against an earlier
 # version was measured against a different question.
-PROMPT_VERSION = "l4-diff/3"
+#
+# /4 is the one that was not cosmetic. Intervals here were formatted with `%g`, which
+# prints up to six significant figures, while the labelling harness prints two: the judge
+# read `0.21-0.3041` where the human read `0.21-0.30`, on the same fact, in a study whose
+# entire output is whether the two agree. Measured over the corpus, 18 of 46 intervals
+# rendered as different numbers — including every `ownership_loop` and every
+# `test_accompanies_fix` that clears its floor. Both sides now call `format_range`.
+PROMPT_VERSION = "l4-diff/4"
 
 
 def commit_system() -> str:
@@ -73,7 +81,7 @@ def _band(fact) -> str:
     if fact.interval is None:
         return f"{fact.value}{unit}"
     return (
-        f"{fact.interval.low:g}-{fact.interval.high:g}{unit} "
+        f"{format_range(fact.interval.low, fact.interval.high)}{unit} "
         f"(point estimate {fact.value}{unit}; "
         f"bounds at {fact.interval.low_level:.0%}/{fact.interval.high_level:.0%})"
     )
@@ -97,7 +105,7 @@ def _render_facts(facts: RepoFacts, keys: tuple[str, ...]) -> str:
             # Suppressed means no point estimate, not no information.
             lines.append(
                 f"  {key}: no point estimate — the evidence supports "
-                f"{fact.interval.low:g}-{fact.interval.high:g} "
+                f"{format_range(fact.interval.low, fact.interval.high)} "
                 f"from {fact.denominator} observation(s)"
             )
         else:
@@ -117,7 +125,7 @@ def _render_metrics(metrics: SessionMetrics | None, availability: EvidenceAvaila
         if rate is None:
             continue
         band = (
-            f"{rate.low:g}-{rate.high:g}"
+            format_range(rate.low, rate.high)
             if rate.low is not None and rate.high is not None
             else "unknown"
         )
