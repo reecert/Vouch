@@ -59,7 +59,7 @@
 # rendering bug proved the point — see notes.reversal_render_version_is_provenance in
 # repos.yaml.
 metadata:
-  code_sha: 54d3a97704af72c7ac82bdd4c1152d4acbcf6023
+  code_sha: d56e9808cfc71757c4686b36c3de311ef3e11a4f
   dirty: false
   extractor_version: l1-extract/2
   l1_config: ""       # stamped per round from L1Config.fingerprint(); no round has run
