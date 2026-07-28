@@ -387,7 +387,11 @@ def _apply_suppression(
                         "interval": None,
                         "numerator": None,
                         "denominator": None,
-                        "note": f"not assessable here — {blocker.detail}",
+                        # The reason only. `status` already says the fact is not
+                        # assessable, and every renderer prints the status beside the note,
+                        # so a note that opened with "not assessable here — " came out as
+                        # that phrase twice with the reason trailing behind both.
+                        "note": blocker.detail,
                     }
                 )
             )

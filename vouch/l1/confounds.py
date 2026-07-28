@@ -188,8 +188,9 @@ def detect_confounds(
                 severity=Severity.WARN,
                 direction=BiasDirection.UNDERSTATES,
                 detail=(
-                    f"{stats.n_squash_marked}/{stats.n_human} commit subjects carry a "
-                    f"squash marker ({squash_share:.0%}). Squash-merging collapses each "
+                    f"{stats.n_squash_marked} of {stats.n_human} human-authored commits "
+                    f"(bots excluded) carry a squash marker in their subject line "
+                    f"({squash_share:.0%}). Squash-merging collapses each "
                     "branch into a single commit attributed to the merger, so individual "
                     "fix-and-test commits are not visible and commits look larger than the "
                     "work behind them."

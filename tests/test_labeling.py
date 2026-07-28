@@ -84,9 +84,12 @@ _RENDER_FIXTURE = RepoFacts(
             interval=Interval(low=0.0, high=0.4295, low_level=0.8, high_level=0.95),
         ),
         Fact(
+            # The note is the reason alone, exactly as `_apply_suppression` writes it: a
+            # note that repeated the status is what produced the stutter this fixture now
+            # guards against.
             key="ownership_loop", status=FactStatus.NOT_ASSESSABLE,
             polarity=Polarity.HIGHER_IS_BETTER,
-            note="a solo repo has nobody else's defect to return to",
+            note="subject authored 45/45 human commits (100%); 1 distinct human author(s)",
         ),
         Fact(
             key="followup_latency", status=FactStatus.SUPPRESSED_LOW_N, unit=Unit.DAYS,
@@ -115,7 +118,7 @@ _RENDER_FIXTURE = RepoFacts(
 )
 
 #: Bump with RENDER_VERSION. See test_the_render_version_tracks_what_is_actually_on_screen.
-_RENDER_DIGEST = "6d3ec1ded6ea943f"
+_RENDER_DIGEST = "a0edd6287ca909a5"
 
 
 @pytest.fixture
@@ -128,6 +131,14 @@ def facts(tmp_path: Path):
 
 def _spec(key: DimensionKey):
     return next(s for s in DIMENSIONS if s.key is key)
+
+
+def _extract(tmp_path: Path, variant: str) -> RepoFacts:
+    """L1's real output for one fixture repo — notes and confound details included."""
+    repo = tmp_path / variant
+    getattr(repos, variant)(repo)
+    snapshot = ingest(str(repo), cache_dir=tmp_path / "cache")
+    return extract_facts(snapshot, SUBJECT, repo)
 
 
 # --- blindness -----------------------------------------------------------------------------
@@ -295,13 +306,45 @@ def test_a_fact_with_no_better_direction_says_so_rather_than_going_quiet(facts) 
 
 
 def test_confounds_are_shown_with_their_direction(tmp_path: Path) -> None:
-    repo = tmp_path / "solo"
-    repos.solo(repo)
-    snapshot = ingest(str(repo), cache_dir=tmp_path / "cache")
-    solo_facts = extract_facts(snapshot, SUBJECT, repo)
-
-    task = build_task(_spec(DimensionKey.OWNERSHIP), "solo", solo_facts)
+    task = build_task(
+        _spec(DimensionKey.OWNERSHIP), "solo", _extract(tmp_path, "solo")
+    )
     assert any("solo_repo" in c for c in task.confounds)
+
+
+def test_a_fact_that_cannot_be_assessed_says_so_once(tmp_path: Path) -> None:
+    """The status belongs to the line, the reason belongs to the note.
+
+    Both used to say "not assessable", so a suppressed fact rendered as "not assessable —
+    not assessable here — subject authored…" and the reason — the only part a labeller can
+    act on — arrived third, behind two identical phrases.
+    """
+    task = build_task(
+        _spec(DimensionKey.OWNERSHIP), "solo", _extract(tmp_path, "solo")
+    )
+    line = next(line for line in task.evidence if "ownership_loop" in line)
+
+    assert line.count("not assessable") == 1
+    assert "distinct human author" in line, "the reason did not survive the fix"
+
+
+def test_a_commit_count_names_the_population_it_counts(tmp_path: Path) -> None:
+    """Two denominators, adjacent, over different populations, is the missing-L2 failure.
+
+    `subject activity` counts every author including bots; the confound lines beneath it
+    count human commits only. Rendered as bare totals they read as one series — "671 of
+    1482" above "1087 of 1335" — and a labeller who subtracts them, or who reads the
+    subject's share off the wrong denominator, is drawing on a relationship nothing on
+    screen ever stated.
+    """
+    facts = _extract(tmp_path, "squash_merged")
+    task = build_task(_spec(DimensionKey.SCOPE_CONTROL), "squash", facts)
+
+    activity = next(line for line in task.evidence if "subject activity" in line)
+    squash = next(c for c in task.confounds if "squash_merge_history" in c)
+
+    assert "by every author (bots included)" in activity
+    assert "human-authored commits (bots excluded)" in squash
 
 
 # --- what is not a judgement call is not offered as one ----------------------------------

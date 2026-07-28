@@ -97,12 +97,14 @@ JUDGEABLE_VERDICTS: tuple[Verdict, ...] = tuple(
 #: stayed identical, because neither the numbers nor the config had changed. The rendering
 #: is part of what a label is a judgement of.
 #:
-#: **Bump this whenever what appears on screen changes**, including wording. `1` is the
+#: **Bump this whenever what appears on screen changes**, including wording. `1` was the
 #: first version that renders both layers, states polarity, formats intervals at a fixed
-#: precision, and forces the verdict where availability settles it — i.e. nothing labelled
-#: before this commit was labelled against it. ``tests/test_labeling.py`` pins the rendered
-#: output against a digest so that changing the render without bumping this fails.
-RENDER_VERSION = "label-render/1"
+#: precision, and forces the verdict where availability settles it. `2` fixes two things a
+#: pilot run surfaced: a fact whose status was printed twice, and two commit counts on
+#: adjacent lines whose denominators counted different populations without saying so.
+#: ``tests/test_labeling.py`` pins the rendered output against a digest so that changing
+#: the render without bumping this fails.
+RENDER_VERSION = "label-render/2"
 
 
 @dataclass
@@ -195,6 +197,10 @@ def _fact_line(facts: RepoFacts, key: str) -> str:
         return f"  {key}: {band}  (point estimate {fact.value}{unit}, from {denom}){way}"
     if fact.status is FactStatus.SUPPRESSED_LOW_N:
         return f"  {key}: {band} from {denom} — too thin for a point estimate{way}"
+    # The status is stated here and the note explains it. L1 used to open the note with the
+    # status as well, which rendered as "not assessable — not assessable here — subject
+    # authored…": the reason, the only part carrying information, sat behind two identical
+    # phrases. The note is the explanation; saying it once is this line's job.
     return f"  {key}: not assessable — {fact.note}"
 
 
@@ -250,9 +256,15 @@ def build_task(
     evidence = [_fact_line(facts, key) for key in spec.l1_facts]
     if not spec.l1_facts:
         evidence = ["  (no commit-trail facts feed this dimension)"]
+    # Both counts name their population. `n_commits_total` counts every author including
+    # bots, while the confound lines a few rows below quote human-only denominators — so
+    # "671 of 1482 commits" sat directly above "1087 of 1335", two denominators over two
+    # different populations with nothing on screen relating them. A labeller reading them as
+    # the same population gets the subject's share of the repo wrong in either direction.
     evidence.append(
-        f"  subject activity: {facts.n_commits_by_subject} of "
-        f"{facts.n_commits_total} commits, {facts.window_first} to {facts.window_last}"
+        f"  subject activity: {facts.n_commits_by_subject} commits by the subject, out of "
+        f"{facts.n_commits_total} in this repo by every author (bots included), "
+        f"{facts.window_first} to {facts.window_last}"
     )
 
     session = [_metric_line(metrics, key) for key in spec.l2_metrics]

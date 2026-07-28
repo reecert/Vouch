@@ -42,7 +42,13 @@ __all__ = [
 #: interval. Distinct from `SCHEMA_VERSION`, which describes the output's shape: a fix that
 #: changes what `ownership_loop` counts leaves the shape identical and every cached value
 #: wrong. When in doubt, bump it; the cost of a spurious miss is one re-run.
-EXTRACTOR_VERSION = "l1-extract/2"
+#:
+#: `3` moved no number: it rewrote a confound's `detail` and a suppressed fact's `note`.
+#: Those strings are payload, not presentation — they are cached with the facts and read
+#: verbatim by a human labeller and by the judge — so a stale entry would put the old
+#: wording on screen under the new code's provenance stamp, which is the one thing the
+#: stamp exists to make impossible.
+EXTRACTOR_VERSION = "l1-extract/3"
 
 _KEY_LEN = 24
 
