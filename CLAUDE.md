@@ -46,10 +46,15 @@ separate Next.js 15 / React 19 / Tailwind 4 app for L5 rendering.
 | L2 | `vouch/l2` | Session logs → derived metrics. Raw logs never leave the machine; the payload schema has no free-text field. |
 | L3 | `vouch/l3` | Sessions ↔ commits. Local. Three-valued: corroborated / ambiguous / uncorroborated. |
 | L4 | `vouch/l4` | Diffs → dimension verdicts. `insufficient_evidence` is a schema enum, not a prompt request. Claims cite SHA **and** path. |
-| L5 | `vouch/l5` | Profile assembly. Report + share link not built. |
+| L5 | `vouch/l5` | Profile assembly. Report + share link built. |
+
+`vouch/pipeline.py` is the layer order, written once: `run_profile()` is what both the CLI
+and the server worker call. A second transcription of it is how the two would silently
+diverge. `vouch/serve` is the hosted path — `db.py` is the SQLite state the Next app shares
+via `node:sqlite`, `worker.py` drains the job queue. Neither judges, extracts or renders.
 
 `vouch/cli.py` is a thin typer adapter — all logic lives in `vouch/`. Commands: `facts`,
-`profile`, `sessions`, `identity`, `label`, `eval`.
+`profile`, `sessions`, `identity`, `label`, `eval`, `worker`.
 
 ## Invariants — do not regress these
 
@@ -64,6 +69,35 @@ separate Next.js 15 / React 19 / Tailwind 4 app for L5 rendering.
   (author rank + digest), resolved against the clone at run time. `load_labels` scans the
   raw file for anything email-shaped and refuses to load. CI checks out at `fetch-depth: 0`
   so the privacy test scans the whole history.
+- **The repo address stops at ingest.** `RepoSnapshot.repo` is `repo_label(repo_url)`:
+  `org/repo` for a remote, the **leaf alone** for a local path, because a local parent
+  directory is where someone filed a clone (`~/clients/bigco/api`) and not who owns it. No
+  home directory, no host, no credentials. The real address stays in-process as `repo_path`.
+  `assert_no_machine_locals` (`tests/conftest.py`) scans finished documents against a fixed
+  canary floor, because a judge that reads source can quote a path the normalizer never saw.
+- **A stored `profile_id` must equal `compute_id()` of its own bytes.** Regenerate a
+  snapshot; never hand-edit one and never edit the id to match.
+- **A share link is immutable within a version, not forever.** `profile_id` hashes the
+  document, so anything that moves the hashed payload — an L5 field, a new `Provenance`
+  entry, a normalizer that rewrites a value — retires every link already sent. That is the
+  accepted cost, not a bug to engineer around: a redirect map from retired ids would have to
+  be maintained for the life of the product and it would publish the fact that two ids
+  describe one subject, which is the disclosure an unlisted link exists to prevent. Bump the
+  version, regenerate, re-share. `test_stored_id_reproduces` is what keeps the retirement
+  loud instead of silent.
+- **A hosted profile is git-only, structurally.** A server cannot read `~/.claude/projects`,
+  so `vouch/serve/worker.py` passes no session evidence and the affected dimensions report
+  `not_collected`. Do not add a way to upload logs to close that gap — the payload staying on
+  the machine is the product, and "we could not look" must never render as "we looked".
+- **Nothing from a browser becomes a git argument.** `/api/jobs` accepts a bare `owner/repo`
+  matching `GITHUB_FULL_NAME`; the worker builds the URL. A path, an ssh address, an https
+  URL or a leading `--` is refused at the door, and a test asserts the TypeScript and Python
+  patterns are the same string.
+- **Generated profiles never land in `web/data/profiles/`.** That directory is tracked and
+  byte-pinned; real documents go to `var/` (gitignored). The split is also what keeps the
+  revoke path unable to reach a checked-in sample.
+- **Ownership is read from the session, never from the request.** Every route that touches a
+  job filters on `user_id`; the 404 for someone else's job is the same as for a missing one.
 - **`eval/labels.yaml` is tracked and empty**, and a test keeps it that way. Real labelling
   writes `eval/labels.local.yaml` (gitignored). While it is empty, nothing here licenses a
   claim about judge accuracy.
@@ -89,6 +123,9 @@ Bump when the thing they describe changes — a stale key serves wrong cached da
 pip install -e ".[dev]"
 pytest -q          # entire suite is offline: no network, no providers installed
 ruff check .       # E, F, I, UP, B; line-length 100, E501 ignored
+
+cd web && npm run dev    # the site; needs web/.env.local for the connect flow
+vouch worker             # drains queued jobs; nothing builds without it
 ```
 
 ## Tests
@@ -98,6 +135,11 @@ case. `tests/fixtures/builder.py` builds real synthetic git repos (author identi
 touched files, revert bodies) — use it rather than mocking git. L4 tests drive scripted
 providers, never a real LLM. `test_l1_golden.py` pins byte-identical output over eight
 fixture repos; if a change moves golden output, that is the change under review.
+
+`test_serve.py` runs the hosted path offline: `VOUCH_GIT_BASE` points at a local fixture, so
+"clone `owner/repo` from GitHub" resolves without a network. The web half has no test
+runner — the properties that matter there are asserted by reading the source from Python
+(`test_web_share.py`), which is enough for a guard and not enough for behaviour.
 
 ## Docs
 

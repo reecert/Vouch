@@ -117,6 +117,39 @@ python -m build          # -> dist/*.whl and dist/*.tar.gz
 Provider SDKs are an optional extra (`[providers]`), so they are **not** runtime
 dependencies of the wheel.
 
+## Running the hosted flow locally
+
+Two processes and one SQLite file. The web app enqueues, the worker runs the pipeline;
+neither talks to the other except through `var/vouch.db`.
+
+```bash
+# 1. an OAuth app: https://github.com/settings/developers
+#    callback = <NEXT_PUBLIC_SITE_URL>/api/auth/callback
+cat > web/.env.local <<'EOF'
+GITHUB_CLIENT_ID=...
+GITHUB_CLIENT_SECRET=...
+NEXT_PUBLIC_SITE_URL=http://localhost:3000
+EOF
+
+cd web && npm install && npm run dev      # terminal 1
+vouch worker                              # terminal 2, from the repo root
+```
+
+The worker needs a judge, so `ANTHROPIC_API_KEY` must be set or every job finishes `failed`
+with "the judge could not produce a grounded verdict". `--once` drains the queue and exits,
+which is the shape a cron-style deployment wants.
+
+Environment that both sides read:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `VOUCH_DB` | `var/vouch.db` | Must resolve to the same file from `web/` and the repo root. |
+| `VOUCH_PROFILE_DIR` | `var/profiles` | Generated documents. Never `web/data/profiles`, which is tracked. |
+| `VOUCH_GIT_BASE` | `https://github.com/` | Where a validated `owner/repo` is cloned from. The test suite points it at a fixture directory, which is how the hosted path is exercised offline. |
+
+`var/` is gitignored in full: it holds repo addresses, subject email addresses, a GitHub
+token and real people's profiles. None of it belongs in a commit.
+
 ## CI/CD
 
 GitHub Actions in `.github/workflows/`:

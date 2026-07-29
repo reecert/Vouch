@@ -268,6 +268,15 @@ Report structure (informed by the baseline, §2 of `baseline-competitor.md`):
 Share links resolve to **frozen snapshots**, not live profiles (adopted from the baseline's
 "frozen profile projections" — a good idea, and the right default for a document about a person).
 
+**Two ways in, one document (1f).** A subject either runs the CLI or connects a repo in the
+browser. The browser path can run L1, L4 and L5 and structurally cannot run L2 or L3 — a server
+has no access to `~/.claude/projects` — so it produces a git-only profile whose telemetry-backed
+dimensions read `not_collected`. The temptation this creates is an upload endpoint for session
+logs, and that is the one thing not to build: the payload never leaving the machine is what the
+whole L2/L3 design is for, and a profile that quietly filled the gap would let a reader mistake
+"we could not look" for "we looked and found nothing". The CLI stays the only path to
+corroboration, which also makes the differentiator the reason to run it.
+
 ---
 
 ## Part 3 — Schema sketch
@@ -372,9 +381,18 @@ later phase's output existing.
 | **1d** | **L4 judge.** Diff-level prompts, strict output schema with the verdict enum, SHA+path grounding validator, support check, judge cache, eval labels populated. | ⚠️ **Built, not calibrated.** 33 tests; harness ported to dimension verdicts and the v0 pipeline deleted. `insufficient_evidence` observed firing on a genuinely thin history; grounding, support check and the over-eager adversary all pass. **The holdout is still empty** — §5 q8. Treat L4's calibration as unmeasured. |
 | **1e** | **L5 web app.** Next.js report, frozen share snapshot, Limitations + Risks-to-probe sections. | ✅ **Done.** 19 tests. A repo goes end-to-end to a frozen `/p/<id>` snapshot; `next build` statically exports it and the HTML carries every required section. Limitations are derived from confounds/sampling/absent layers rather than volunteered by the model. |
 
+| **1f** | **Hosted connect.** GitHub sign-in, repo picker, job queue, worker, dashboard with revoke, plus the product pages the flow needs. | ✅ **Built, unlabelled like the rest of L4.** 24 tests. A queued job goes to a resolving `/p/<id>` and a revoked one to a 404; cross-user reads and writes 404; a hostile repo name never becomes a `git clone` argument. The judge behind it is still uncalibrated — 1f changes who can start a run, not what a verdict is worth. |
+
 **Explicit non-goals for phase 1**, per the brief — not built, not stubbed, not designed around:
-employer workspaces, job postings, candidate directory, any two-sided marketplace mechanic, auth
-beyond profile ownership, private-repo OAuth, payments.
+employer workspaces, job postings, candidate directory, any two-sided marketplace mechanic,
+private-repo OAuth, payments.
+
+**One non-goal moved, deliberately.** "Auth beyond profile ownership" was on that list and 1f
+crosses it: there is now a session, and a `user_id` on every job. What it bought is the thing
+the list was protecting — profile *ownership* is now enforceable, so a subject can revoke their
+own document and cannot touch anyone else's. The rest of the list is untouched, and the scope
+stays exactly there: sign-in requests `read:user`, which cannot read a private repository or
+write anything, so private-repo OAuth remains out by construction rather than by restraint.
 
 **Housekeeping:** the repo currently has **zero commits** (branch `master`, everything untracked),
 while CI triggers on `main`. First commit of phase 1a should resolve the branch name and land the
