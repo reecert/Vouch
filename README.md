@@ -14,7 +14,7 @@ what to ask, not to make the decision for them.
 | **L2** `vouch/l2` | Local session logs → derived metrics | Raw logs and source never leave the machine — the upload schema has no free-text field. |
 | **L3** `vouch/l3` | Sessions ↔ commits | Runs locally. Three-valued: corroborated / ambiguous / uncorroborated. |
 | **L4** `vouch/l4` | Diffs → dimension verdicts | `insufficient_evidence` is a schema enum, not a prompt request. Claims cite SHA **and** path. |
-| **L5** | Report + share link | Not built yet. |
+| **L5** `vouch/l5` + `web/` | Profile assembly → static report | Limitations are derived from confounds and absent layers, never volunteered by the model. |
 
 ## Design rules that are enforced, not aspired to
 
@@ -38,7 +38,7 @@ vouch eval --split holdout                          # score the judge against la
 
 ## Status
 
-L1–L4 are built and tested (203 tests, offline). L5 is not started.
+L1–L5 are built and tested (416 tests, offline).
 
 **The judge is uncalibrated.** `eval/labels.yaml` is empty, so nothing here licenses a
 claim about how well its verdicts match human judgement. The harness refuses to print a

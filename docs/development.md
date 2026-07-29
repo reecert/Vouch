@@ -149,5 +149,5 @@ git push origin v0.1.0
 
 ## Project layout
 
-See the [architecture doc](../ARCHITECTURE.md) for the full module breakdown and the scale
-path (which is deliberately *not* built in v0, only left un-foreclosed).
+See [docs/plan.md](plan.md) for the five-layer architecture and open questions.
+[development.md](development.md) covers setup, labelling, CI/CD, and release.
