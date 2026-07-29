@@ -11,8 +11,8 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
-from cli import app
 from tests.fixtures import logs, repos
+from vouch.cli import app
 
 runner = CliRunner()
 SUBJECT = "alice@example.com"
@@ -113,13 +113,7 @@ def test_eval_rejects_a_malformed_label_file(tmp_path: Path) -> None:
     assert "label validation failed" in result.output
 
 
-# --- the labelling loop ---------------------------------------------------------------
-#
-# `vouch label` is the only interactive command in the tool, and the one whose output is
-# ground truth for everything else. The harness functions are covered in
-# tests/test_labeling.py; what is checked here is the loop around them — that an answer
-# lands in the pool its split assigned, and that the ways a labelling round goes wrong
-# (quit, a typo, an address in a reason) cost nothing.
+# The labelling loop, not the harness it calls: tests/test_labeling.py covers that.
 
 
 def _corpus(path: Path, repo: Path) -> Path:
@@ -378,7 +372,7 @@ def test_profile_runs_end_to_end_to_a_share_link(tmp_path: Path, monkeypatch) ->
     provider = MockJudgeProvider(MockMode.HONEST)
     sample = select_commits(snapshot.commits, facts)
     provider.bind(build_allowlist(facts, [extract_diff(repo, c) for c in sample.commits]))
-    monkeypatch.setattr("cli.build_default_provider", lambda: provider)
+    monkeypatch.setattr("vouch.cli.build_default_provider", lambda: provider)
 
     web_dir = tmp_path / "profiles"
     result = runner.invoke(
