@@ -36,6 +36,7 @@ packages = [
     "vouch.l4",
     "vouch.l5",
     "vouch.eval",
+    "vouch.serve",
 ]
 
 [tool.pytest.ini_options]

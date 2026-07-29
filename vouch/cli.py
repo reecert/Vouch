@@ -40,19 +40,17 @@ from vouch.l2.parser import default_log_dir, parse_snapshot
 from vouch.l2.payload import MetricScope, SessionMetrics
 from vouch.l2.preview import render_payload, render_preview
 from vouch.l2.snapshot import open_snapshot, snapshot_sessions
-from vouch.l3.join import join, sessions_in_repo
 from vouch.l3.repo_identity import (
-    HistoricalRoot,
     discover_candidate_roots,
     history_paths,
-    load_identity_file,
     resolve_identity,
 )
 from vouch.l4.judge import JudgeError, judge_profile
 from vouch.l4.prompt import PROMPT_VERSION
 from vouch.l4.providers import build_default_provider
 from vouch.l4.schema import Verdict
-from vouch.l5.profile import build_profile
+from vouch.pipeline import run_profile
+from vouch.serve.worker import serve_forever
 
 app = typer.Typer(help="vouch — evidence-backed capability profiles from real commits.")
 
@@ -149,24 +147,6 @@ def profile(
     Emits the shareable profile document. Dimensions that depend on session telemetry
     report ``not_collected`` when it is absent, rather than being guessed at.
     """
-    repo_path = resolve_repo(repo_url)
-    snapshot = ingest(repo_url)
-    facts_result, _ = cached_extract(
-        repo_url,
-        snapshot.head_sha,
-        author,
-        lambda: extract_facts(snapshot, author, repo_path, aliases=list(alias)),
-        aliases=list(alias),
-    )
-
-    identity = resolve_identity(
-        repo_path,
-        declared=[
-            *load_identity_file(repo_path).historical_roots,
-            *(HistoricalRoot(path=p, why="--historical-root") for p in historical_root),
-        ],
-    )
-
     metrics: SessionMetrics | None = None
     if sessions_file:
         metrics = SessionMetrics.model_validate_json(Path(sessions_file).read_text())
@@ -177,8 +157,7 @@ def profile(
                 err=True,
             )
 
-    corroboration = None
-    session_digest = ""
+    frozen = None
     if log_dir or as_of:
         # A frozen copy, never the live directory this CLI's own session is appending to.
         frozen = (
@@ -188,38 +167,27 @@ def profile(
                 Path(log_dir) if log_dir else default_log_dir(), DEFAULT_CACHE_DIR
             )
         )
-        session_digest = frozen.digest
         typer.echo(
             f"session snapshot: {frozen.digest} "
             f"({frozen.n_files} file(s), as of {frozen.as_of})",
             err=True,
         )
-        parsed = parse_snapshot(frozen)
-        corroboration = join(snapshot.commits, parsed.sessions, identity)
-        scoped, n_out = sessions_in_repo(parsed.sessions, identity)
-        metrics = derive_metrics(
-            parsed.narrowed_to(scoped),
-            scope=MetricScope.REPO,
-            n_out_of_scope=n_out,
-        )
 
     try:
-        result = judge_profile(
-            build_default_provider(),
-            facts_result,
-            repo_path,
-            snapshot.commits,
+        profile_doc = run_profile(
+            repo_url,
+            author,
+            provider=build_default_provider(),
+            aliases=list(alias),
+            historical_roots=list(historical_root),
+            frozen=frozen,
             metrics=metrics,
-            corroboration=corroboration,
         )
     except JudgeError as e:
         typer.echo(f"judge failed: {e}", err=True)
         typer.echo("(run `vouch facts` to inspect the deterministic layer)", err=True)
         raise typer.Exit(1) from e
 
-    profile_doc = build_profile(
-        facts_result, result, metrics, corroboration, session_digest=session_digest
-    )
     payload = profile_doc.model_dump_json(indent=2)
 
     if web_dir:
@@ -542,6 +510,25 @@ def eval_(
         raise typer.Exit(1) from e
 
     typer.echo(format_report(report))
+
+
+@app.command("worker")
+def worker(
+    db: str | None = typer.Option(None, "--db", help="SQLite state file (default: $VOUCH_DB)."),
+    profile_dir: str | None = typer.Option(
+        None, "--profile-dir", help="Where generated profiles are written (default: var/profiles)."
+    ),
+    once: bool = typer.Option(
+        False, "--once", help="Drain the queue and exit instead of polling."
+    ),
+) -> None:
+    """Run queued profile jobs from the web app. Git-only: a server cannot read session logs."""
+    ran = serve_forever(
+        Path(db) if db else None,
+        Path(profile_dir) if profile_dir else None,
+        once=once,
+    )
+    typer.echo(f"ran {ran} job(s)", err=True)
 
 
 if __name__ == "__main__":

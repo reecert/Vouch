@@ -17,3 +17,9 @@ __pycache__/
 # EMPTY as the schema contract (a test enforces that); real labelling happens here.
 eval/labels.local.yaml
 eval/labels.*.local.yaml
+
+# Server state and the profiles it generates. The database holds repo addresses, subject
+# email addresses and a GitHub token; the profiles are real documents about real people.
+# Neither belongs in a commit — `web/data/profiles/` is for the synthetic samples only.
+var/
+web/.env.local
