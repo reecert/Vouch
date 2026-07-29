@@ -127,20 +127,13 @@ export const VERDICT_LABELS: Record<Verdict, string> = {
 
 /** Declining verdicts are neutral, never alarm colours: they are not a mark against anyone. */
 export const VERDICT_STYLES: Record<Verdict, string> = {
-  strong:
-    "bg-emerald-50 text-emerald-900 ring-emerald-600/20 dark:bg-emerald-950 dark:text-emerald-100 dark:ring-emerald-400/20",
-  moderate:
-    "bg-sky-50 text-sky-900 ring-sky-600/20 dark:bg-sky-950 dark:text-sky-100 dark:ring-sky-400/20",
-  limited:
-    "bg-amber-50 text-amber-900 ring-amber-600/20 dark:bg-amber-950 dark:text-amber-100 dark:ring-amber-400/20",
-  insufficient_evidence:
-    "bg-slate-100 text-slate-700 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-200 dark:ring-slate-400/20",
-  not_collected:
-    "bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-400/20",
-  out_of_scope:
-    "bg-slate-100 text-slate-600 ring-slate-500/20 dark:bg-slate-800 dark:text-slate-300 dark:ring-slate-400/20",
-  contradicted:
-    "bg-rose-50 text-rose-900 ring-rose-600/20 dark:bg-rose-950 dark:text-rose-100 dark:ring-rose-400/20",
+  strong: "bg-emerald-50/80 text-emerald-800 border border-emerald-200/80",
+  moderate: "bg-sky-50/80 text-sky-800 border border-sky-200/80",
+  limited: "bg-amber-50/80 text-amber-800 border border-amber-200/80",
+  insufficient_evidence: "bg-slate-100/80 text-slate-700 border border-slate-200",
+  not_collected: "bg-slate-100/80 text-slate-600 border border-slate-200",
+  out_of_scope: "bg-slate-100/80 text-slate-600 border border-slate-200",
+  contradicted: "bg-rose-50/80 text-rose-800 border border-rose-200/80",
 };
 
 export const CONFIDENCE_LABELS: Record<Confidence, string> = {
