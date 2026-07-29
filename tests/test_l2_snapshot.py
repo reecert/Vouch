@@ -33,9 +33,6 @@ def _log_dir(tmp_path: Path) -> Path:
     return tmp_path / "projects"
 
 
-# --- subagents are not sessions ----------------------------------------------------------
-
-
 def test_a_subagent_transcript_folds_into_its_parent(tmp_path: Path) -> None:
     root = _log_dir(tmp_path)
     logs.write_session(
@@ -97,9 +94,6 @@ def test_an_orphaned_subagent_still_reports_as_one_session(tmp_path: Path) -> No
 
     assert len(result.sessions) == 1
     assert result.sessions[0].session_id == SID
-
-
-# --- the snapshot -------------------------------------------------------------------------
 
 
 def test_the_snapshot_is_a_copy_and_does_not_move_under_the_reader(
@@ -224,8 +218,7 @@ def test_the_profile_id_is_stable_across_runs_at_the_same_as_of(tmp_path: Path) 
     assert first.profile_id == second.profile_id
     assert first.provenance.session_snapshot == frozen.digest
 
-    # ...and a genuinely different as-of is a genuinely different document, not a silent
-    # overwrite of the old one.
+    # ...and a different as-of is a different document, not an overwrite of the old one.
     moved = snapshot_sessions(root, cache)
     third = build_profile(
         facts,

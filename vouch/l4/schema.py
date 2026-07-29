@@ -48,9 +48,7 @@ __all__ = [
     "CONCLUSIVE_VERDICTS",
 ]
 
-#: Bumped to 2 when `not_assessed`/`not_assessable` became `not_collected`/`out_of_scope`.
-#: The constrained output schema changed, so a stored result carrying the old spellings is
-#: not readable as this one and says so rather than half-parsing.
+#: Bump when the constrained output schema moves: a stored result must not half-parse.
 L4_SCHEMA_VERSION = "l4/2"
 
 
@@ -69,24 +67,13 @@ class Verdict(StrEnum):
     STRONG = "strong"
     MODERATE = "moderate"
     LIMITED = "limited"
-    # Looked, and what was found does not settle the question. Two shapes, one verdict:
-    # evidence too thin to divide by, and evidence that is present and does not decide —
-    # `commit_scoping: 2.0-2.0` on a measure whose polarity is neutral, with the session
-    # half of the dimension absent, is a real measurement pointing nowhere. Neither is
-    # `not_collected` (the layer was read) or `out_of_scope` (it was read at the right
-    # scope), and which one it is stays a human's call rather than the harness's.
-    INSUFFICIENT_EVIDENCE = "insufficient_evidence"
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"  # looked; it does not settle the question
     NOT_COLLECTED = "not_collected"  # did not look; the input was never gathered
-    # Looked, and the evidence that exists is not valid at the scope this dimension claims
-    # — session telemetry from other projects cannot describe work in this repository.
-    # Distinct from `insufficient_evidence` because the remedy is different: more data of
-    # the same kind would not help, only data of the right kind would.
-    OUT_OF_SCOPE = "out_of_scope"
+    OUT_OF_SCOPE = "out_of_scope"  # looked; it describes a different population
     CONTRADICTED = "contradicted"  # looked; the evidence points the other way
 
 
-#: Verdicts that assert something positive about the candidate. Only these are subject to
-#: the support check, and only these can be downgraded by it.
+#: The verdicts that assert something positive, so the only ones the support check downgrades.
 CONCLUSIVE_VERDICTS = frozenset({Verdict.STRONG, Verdict.MODERATE})
 
 

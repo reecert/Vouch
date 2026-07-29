@@ -31,8 +31,7 @@ DEPENDABOT = ("dependabot[bot]", "49699333+dependabot[bot]@users.noreply.github.
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CORPUS_PATH = REPO_ROOT / "eval" / "repos.yaml"
 
-# Any address-shaped token. Deliberately broad: the point is to catch a slip, not to parse
-# RFC 5322.
+# Broad on purpose: this catches a slip, it does not parse RFC 5322.
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
 
@@ -159,8 +158,7 @@ def test_duplicate_ids_are_rejected(tmp_path: Path) -> None:
             {"schema_version": "eval/repos/1", "name": "fixture corpus", "repos": [row, row]}
         )
     )
-    # Matched on the full phrase: `tmp_path` contains this test's own name, so a bare
-    # "duplicate" is satisfied by the path in the message and passes whatever went wrong.
+    # The full phrase: `tmp_path` holds this test's name, so a bare "duplicate" always matches.
     with pytest.raises(CorpusError, match="duplicate corpus id"):
         load_corpus(path)
 
@@ -178,9 +176,6 @@ def test_a_corpus_that_does_not_name_itself_is_refused(tmp_path: Path) -> None:
 
     with pytest.raises(CorpusError, match="name"):
         load_corpus(path)
-
-
-# ---- the invariant, asserted against the real file -------------------------------------
 
 
 def test_the_committed_corpus_contains_no_address() -> None:
@@ -205,8 +200,7 @@ def test_every_test_named_in_the_privacy_note_exists() -> None:
     """
     note = yaml.safe_load(CORPUS_PATH.read_text())["notes"]["privacy"]
 
-    # `path::test_x`, `path::Class::test_x`, and the `...::test_x` shorthand, which carries
-    # the previously named file forward exactly as it reads.
+    # `path::test_x`, `path::Class::test_x`, and `...::test_x` carrying the last file forward.
     cited, current = [], None
     for path, name in re.findall(
         r"(tests/\S+?\.py|\.\.\.)::(?:\w+::)?(test_\w+)", note

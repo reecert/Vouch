@@ -45,8 +45,7 @@ def _metric_lines(m: EvalMetrics) -> list[str]:
 
 def format_report(report: EvalReport) -> str:
     lines = [_RULE, f"EVAL — split: {report.split}"]
-    # Above the metrics, always: what the corpus is decides what the metrics are about, and
-    # a figure quoted without it reads as a statement about the judge in general.
+    # Above the metrics, always: unattributed, the figure reads as a claim about the judge.
     lines.append(
         f"corpus: {report.corpus_name}"
         if report.corpus_name

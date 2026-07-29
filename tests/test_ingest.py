@@ -6,17 +6,7 @@ from vouch.ingest import (
     blame_line_author,
     changed_old_lines,
     ingest,
-    is_test_path,
 )
-
-
-def test_is_test_path():
-    assert is_test_path("tests/test_x.py")
-    assert is_test_path("pkg/test_thing.py")
-    assert is_test_path("pkg/thing_test.go")
-    assert is_test_path("conftest.py")
-    assert not is_test_path("src/thing.py")
-    assert not is_test_path("latest/build.py")  # 'test' not as a boundary token
 
 
 def test_ingest_normalizes_commits(tmp_path: Path):
@@ -40,8 +30,7 @@ def test_ingest_normalizes_commits(tmp_path: Path):
     by_sha = {c.sha: c for c in snap.commits}
     assert by_sha[shas[0]].author_email == "alice@example.com"
     assert by_sha[shas[0]].files == ["src/a.py"]
-    assert by_sha[shas[0]].test_files == []
-    assert by_sha[shas[1]].test_files == ["tests/test_a.py"]
+    assert by_sha[shas[1]].files == ["tests/test_a.py"]
 
 
 def test_ingest_is_cached(tmp_path: Path):

@@ -94,7 +94,7 @@ def write_sessions(repo: Path, log_dir: Path) -> None:
     plans: dict[str, list[tuple[str, float]]] = {
         # C1: edited an hour before the commit -> corroborated to S1.
         "S1": [("src/a.py", -1)],
-        # C2 (src/b.py): no session at all -> must stay uncorroborated.
+        # C2 (src/b.py) has no session at all -> must stay uncorroborated.
         # C3: edited 30 minutes before -> corroborated to S3.
         "S3": [("src/c.py", 47.5)],
         # C4: two sessions fit equally well -> ambiguous, not a coin flip.
@@ -102,7 +102,7 @@ def write_sessions(repo: Path, log_dir: Path) -> None:
         "S4b": [("src/d.py", 71.0)],
         # C5: edited only AFTER the commit -> direction constraint rejects it.
         "S5": [("src/e.py", 100)],
-        # C6: edited five days before -> beyond max_lag.
+        # C6: edited five days before, and still the file's only editor.
         "S6": [("src/f.py", 0)],
         # C7: touched 1 of the commit's 2 files -> overlap 0.5, at the floor.
         "S7": [("src/g.py", 143)],
@@ -112,12 +112,7 @@ def write_sessions(repo: Path, log_dir: Path) -> None:
         "S9": [("package-lock.json", 191)],
         # C10: a session in a different project entirely -> must not corroborate.
         "S10": [("../elsewhere/src/m.py", 215)],
-        # C11: the open-session case. S11long was still running when the commit landed —
-        # it edited an unrelated file after it — but its own touch of src/p.py is thirty
-        # hours stale, and S11short edited src/p.py an hour before the commit. S11short
-        # produced this commit. The previous scorer measured lag from the session envelope
-        # and clamped it to zero for anything still open, so S11long scored a perfect
-        # temporal 1.0 on the strength of unrelated later activity and took the commit.
+        # C11: S11long was still open at the commit, but its touch of src/p.py is stale.
         "S11long": [("src/p.py", 210), ("src/q.py", 200), ("src/q.py", 260)],
         "S11short": [("src/p.py", 239)],
     }
@@ -144,10 +139,7 @@ def labels(shas: list[str]) -> list[JoinLabel]:
         ("S3", "edited 30 minutes before the commit"),
         (None, "two sessions fit equally well — the join must decline"),
         (None, "session edited the file only after the commit"),
-        # Corrected. S6 is the only session that ever touched src/f.py and it did so
-        # before the commit; by construction it produced it. Five days is a reason for a
-        # reader to weigh the match, not a reason to withhold it — and withholding it is a
-        # silent false negative, which reads as "this work was unsupervised".
+        # S6 is the file's only editor and preceded the commit, whatever the lag.
         ("S6", "sole editor of the file, five days before the commit"),
         ("S7", "session touched 1 of 2 files — overlap at the floor"),
         (None, "session touched 1 of 3 files — overlap below the floor"),

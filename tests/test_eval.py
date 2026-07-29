@@ -439,8 +439,7 @@ class TestLabelPrivacy:
         construction and is not a third party's to protect.
         """
         allowed = {
-            # Reserved example domains and our own synthetic fixture identities. Anything
-            # outside this set is presumed to belong to a real person.
+            # Reserved domains and our fixtures. Anything else is presumed to be a person.
             "example.com",
             "example.dev",
             "example.org",

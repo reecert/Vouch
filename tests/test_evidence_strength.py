@@ -7,6 +7,13 @@ Every guard the pipeline had fired correctly and the number still got out. `MinN
 is 3 and there were 5, so the floor was cleared. The floors were designed against "100%
 from n=1" and are symmetric, which stops the flattering half of the problem and none of the
 damning half — and the damning half is the one nobody in the loop is motivated to check.
+
+:data:`_CORPUS_INTERVALS` is every interval L1 produced for the ten corpus rows with a local
+clone, at the heads pinned in `eval/repos.yaml`. Eighteen of the 46 rendered as different
+numbers under the two formatters, and not the marginal ones: every `ownership_loop` and
+every `test_accompanies_fix` that clears its floor is in the list. It is frozen rather than
+recomputed because CI has no clones and a full corpus pass is ~45 minutes of blame; what it
+preserves is the *shapes* a real corpus produces, which the sweep below generalises.
 """
 from __future__ import annotations
 
@@ -17,10 +24,7 @@ import pytest
 
 from tests.fixtures import repos
 
-# The two functions that turn one interval into text for a reader: `_band` writes what the
-# model reads, `_fact_line` writes what the human labeller reads. Private, and imported
-# anyway — the property under test is that these two agree, which cannot be stated through
-# any public surface without also dragging in a provider and a corpus row.
+# Private, and imported anyway: that these two renderings agree is the property under test.
 from vouch.eval.labeling import _fact_line as fact_line
 from vouch.eval.labeling import _metric_line as metric_line
 from vouch.ingest import ingest
@@ -58,9 +62,6 @@ def early_career(tmp_path: Path):
     return repo, snapshot, extract_facts(snapshot, SUBJECT, repo)
 
 
-# --- the arithmetic ---------------------------------------------------------------------
-
-
 def test_z_values_match_the_standard_table() -> None:
     assert round(z_for(0.95), 4) == 1.9600
     assert round(z_for(0.80), 4) == 1.2816
@@ -88,9 +89,6 @@ def test_intervals_narrow_as_evidence_accumulates() -> None:
         for n in (4, 10, 50, 500)
     ]
     assert widths == sorted(widths, reverse=True)
-
-
-# --- the asymmetry ----------------------------------------------------------------------
 
 
 def test_the_unfavourable_bound_is_held_to_the_stricter_level() -> None:
@@ -122,8 +120,7 @@ def test_a_damning_claim_needs_more_evidence_than_a_flattering_one() -> None:
     assert flattering.low > 0.75  # "at least three quarters" is supportable at n=5
     assert damning.high > 0.4  # "essentially never" is not
 
-    # The asymmetry is not an artefact of the sample: at the same level both bounds would
-    # sit the same distance from the extreme. They do not.
+    # Not an artefact of the sample: at one level both bounds sit equidistant. They do not.
     symmetric_low = wilson_bounds(5, 5, STRICT_LEVEL)[0]
     assert flattering.low > symmetric_low
 
@@ -169,19 +166,7 @@ def test_a_median_carries_an_interval_too() -> None:
     assert median_interval([4]) is None
 
 
-# --- one interval, two readers ------------------------------------------------------------
-
-#: All 46 intervals L1 produces for the ten corpus rows with a local clone, extracted at the
-#: heads pinned in `eval/repos.yaml` (`wagtail-contrib` and `mitmproxy-contrib` were not
-#: cloned, so they are absent — the sweep below covers their shapes). **Eighteen of the 46
-#: rendered as different numbers** under the two formatters, and they are not the marginal
-#: ones: every `ownership_loop` and every `test_accompanies_fix` that clears its floor is in
-#: the list, which is to say the facts carrying `ownership` and `verification_discipline`.
-#:
-#: Frozen rather than recomputed, because CI has no clones and a full corpus pass is ~45
-#: minutes of blame. What is preserved is the *shapes* a real corpus produces — a
-#: 1131-commit history's `0.0005-0.0042`, a dead repo's `0.0-1.0`, a median landing on a
-#: single integer — under the check below.
+#: Frozen L1 output for the corpus rows with a local clone. See the module docstring.
 _CORPUS_INTERVALS = [
     (0.0005, 0.0042),     # hunter        revert_rate
     (0.21, 0.3041),       # hunter        test_accompanies_fix  <- differed under %g
@@ -313,9 +298,6 @@ def test_a_session_metric_is_read_the_same_way_by_both_sides_too() -> None:
     assert judge == labeller
 
 
-# --- the acceptance case ------------------------------------------------------------------
-
-
 def test_zero_of_five_publishes_as_a_wide_interval_from_zero(early_career) -> None:
     """The acceptance criterion. Not 0.0 — a range that reaches most of the way to a half."""
     _repo, _snapshot, facts = early_career
@@ -363,9 +345,6 @@ def test_evidence_strength_ranks_the_thin_dimension_below_the_others(
     assert strengths[DimensionKey.SCOPE_CONTROL] > strengths[
         DimensionKey.VERIFICATION_DISCIPLINE
     ]
-
-
-# --- ordering rules ------------------------------------------------------------------------
 
 
 def test_declines_sort_below_conclusions(early_career) -> None:

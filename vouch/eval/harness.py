@@ -41,8 +41,7 @@ MIN_LABELS_FOR_EVIDENCE = 15
 #: Below this many scored rows, calibration is not computed and never claimed.
 MIN_LABELS_FOR_CALIBRATION = 30
 
-#: The conclusive verdicts are ordinal, so "adjacent" is meaningful and a disagreement has a
-#: direction. `not_collected` and `contradicted` are categorical — exact match or nothing.
+#: Ordinal, so a disagreement has a direction. The other verdicts are categorical.
 BAND_ORDER: dict[Verdict, int] = {
     Verdict.INSUFFICIENT_EVIDENCE: 0,
     Verdict.LIMITED: 1,
@@ -109,11 +108,7 @@ class EvalReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     split: str
-    #: Which corpus produced these numbers, in its own words. Carried onto the report
-    #: because the corpus is what decides what an agreement figure is evidence *about*: the
-    #: calibration corpus is public repositories, which have no session telemetry, so a
-    #: number measured there says nothing about the dimensions that read from L2. Printed
-    #: above the metrics rather than filed beside them.
+    #: Printed above the metrics: the corpus decides what the figure is evidence *about*.
     corpus_name: str = ""
     prompt_version: str = ""
     total_labelled: int = 0

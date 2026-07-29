@@ -25,7 +25,6 @@ from pydantic import BaseModel, Field
 
 __all__ = ["Identity", "is_bot", "normalize_email", "github_login", "resolve_identity"]
 
-# Machine committers. Matched against the display name and the address.
 _BOT_MARKERS = (
     "[bot]",
     "dependabot",
@@ -100,7 +99,6 @@ def resolve_identity(
     canonical = normalize_email(subject_email)
     claimed = {canonical} | {normalize_email(a) for a in (aliases or [])}
 
-    # Names attached to the claimed addresses; used to find near-matches below.
     names: set[str] = set()
     for name, email in authors:
         if normalize_email(email) in claimed:
@@ -113,7 +111,6 @@ def resolve_identity(
         e = normalize_email(email)
         if e in claimed or is_bot(name, email):
             continue
-        # Same display name, or the same GitHub login behind a different address.
         candidate_login = github_login(e) or e.split("@")[0]
         if name.strip().lower() in lower_names or candidate_login in logins:
             unclaimed.add(e)

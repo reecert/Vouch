@@ -39,9 +39,6 @@ def built(tmp_path: Path):
     return repo, snapshot, facts, tmp_path / "cache"
 
 
-# --- what the key covers -------------------------------------------------------------------
-
-
 def test_the_same_inputs_produce_the_same_key() -> None:
     a = cache_key("r", "a" * 40, SUBJECT)
     b = cache_key("r", "a" * 40, SUBJECT)
@@ -97,9 +94,6 @@ def test_the_extractor_version_is_in_the_key() -> None:
         cache_mod.EXTRACTOR_VERSION = original
 
 
-# --- round-tripping --------------------------------------------------------------------------
-
-
 def test_facts_survive_a_round_trip_byte_for_byte(built) -> None:
     _repo, _snapshot, facts, cache_dir = built
     store_facts("k", facts, cache_dir)
@@ -120,9 +114,6 @@ def test_a_corrupt_entry_is_a_miss_and_is_removed(built) -> None:
 
     assert load_cached_facts("k", cache_dir) is None
     assert not path.exists()
-
-
-# --- the behaviour that saves the time ---------------------------------------------------------
 
 
 def test_the_second_run_does_not_recompute(built) -> None:

@@ -12,6 +12,13 @@ The prompts do **not** ask for `insufficient_evidence` as a favour — the respo
 makes it one of a closed set of values. What the prompts do is describe when it is the
 *right* answer, because a model that never uses it is as miscalibrated as one that always
 does.
+
+Facts reach the model through :func:`vouch.l1.interval.format_range`, the same formatter the
+labelling harness prints for a human. When the two differed — `%g` here at six significant
+figures, two there — the judge read `0.21-0.3041` where the labeller read `0.21-0.30`, on the
+same fact, in a study whose entire output is whether the two agree. Any change to how a
+number is rendered on either side has to move both, and bump :data:`PROMPT_VERSION`:
+calibration measured against an earlier version was measured against a different question.
 """
 from __future__ import annotations
 
@@ -26,16 +33,6 @@ from vouch.l4.schema import CommitJudgment
 __all__ = ["PROMPT_VERSION", "commit_system", "commit_user", "dimension_system",
            "dimension_user"]
 
-# Bumped at /2 when facts started being presented as intervals rather than point estimates,
-# and at /3 when two verdict names changed. Any calibration measured against an earlier
-# version was measured against a different question.
-#
-# /4 is the one that was not cosmetic. Intervals here were formatted with `%g`, which
-# prints up to six significant figures, while the labelling harness prints two: the judge
-# read `0.21-0.3041` where the human read `0.21-0.30`, on the same fact, in a study whose
-# entire output is whether the two agree. Measured over the corpus, 18 of 46 intervals
-# rendered as different numbers — including every `ownership_loop` and every
-# `test_accompanies_fix` that clears its floor. Both sides now call `format_range`.
 PROMPT_VERSION = "l4-diff/4"
 
 

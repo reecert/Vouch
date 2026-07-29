@@ -59,9 +59,7 @@ jobs:
           files: dist/*
           generate_release_notes: true
 
-  # Optional: publish to PyPI via trusted publishing. Runs only if a `pypi`
-  # environment is configured on the repo; otherwise it is skipped, so the
-  # release never fails for lack of PyPI credentials.
+  # Gated, so a release never fails for want of PyPI credentials.
   pypi-publish:
     needs: build
     runs-on: ubuntu-latest

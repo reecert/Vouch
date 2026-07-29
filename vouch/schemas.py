@@ -16,10 +16,6 @@ from datetime import datetime
 
 from pydantic import BaseModel, Field
 
-# --------------------------------------------------------------------------------------
-# ingest output
-# --------------------------------------------------------------------------------------
-
 
 class CommitRecord(BaseModel):
     """One non-merge commit, normalized. The deterministic unit extractors reason over.
@@ -35,12 +31,7 @@ class CommitRecord(BaseModel):
     authored_at: datetime
     subject: str
     files: list[str] = Field(default_factory=list)
-    test_files: list[str] = Field(default_factory=list)  # subset of ``files``
-    # If this commit is a git revert, the SHA it reverts (parsed from the body at
-    # ingest time; the raw body is discarded). None otherwise.
-    reverts_sha: str | None = None
-    # Committer identity/date. Rebase preserves the author date and rewrites these, so a
-    # large, widespread committed_at - authored_at gap means the history was replayed.
+    reverts_sha: str | None = None  # parsed from the body at ingest; the body is discarded
     committer_email: str = ""
     committed_at: datetime | None = None
 
@@ -58,8 +49,5 @@ class RepoSnapshot(BaseModel):
     head_sha: str
     commits: list[CommitRecord] = Field(default_factory=list)
     ingested_at: datetime
-    # Repo-level facts the confound detectors need. Merge commits are excluded from
-    # ``commits`` (we walk with --no-merges), but their *count* is evidence: a repo with
-    # hundreds of commits and zero merges was squash-merged or rebase-merged.
-    n_merge_commits: int = 0
+    n_merge_commits: int = 0  # merges are excluded from ``commits``; the count is evidence
     is_shallow: bool = False

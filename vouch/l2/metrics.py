@@ -5,6 +5,15 @@ rate carries its denominator and a floor below which it is suppressed rather tha
 
 Sequencing is by event index (file order), never by timestamp — `permission-mode` records
 carry no timestamp, so a time-ordered pass would drop every plan signal on the floor.
+
+:data:`METRIC_POLARITY` declares, in one place, which direction of each metric is the
+unfavourable one. It has to live outside the ``_rate`` call sites because the polarity
+decides which end of the interval was held to the strict confidence level, so anything that
+*renders* a metric has to be able to state it: "92 days" alone does not tell a reader
+whether it is a complaint or a compliment. ``EDIT_REVISION`` is deliberately not neutral —
+revisiting a file within a session is the measurable half of revision-before-acceptance, so
+more of it reads as better. That is a modelling claim, and stating it once is what makes it
+arguable.
 """
 from __future__ import annotations
 
@@ -27,24 +36,11 @@ from vouch.l2.payload import (
 __all__ = ["L2MinN", "L2_MIN_N", "METRIC_POLARITY", "derive_metrics"]
 
 
-#: Which direction of each metric is the unfavourable one for the person being profiled.
-#:
-#: Declared here, once, rather than passed at each `_rate` call: the polarity decides which
-#: end of the interval was held to the strict confidence level, so anything that *renders* a
-#: metric has to be able to state it. "92 days" says nothing on its own — a reader cannot
-#: tell whether it is a complaint or a compliment — and the number was drawn asymmetrically
-#: on the strength of an answer the reader was never shown.
-#:
-#: `EDIT_REVISION` is deliberately not neutral: revisiting a file within a session is the
-#: measurable half of revision-before-acceptance, so more of it reads as better here. That
-#: is a modelling claim, and stating it in one place is what makes it arguable.
 METRIC_POLARITY: dict[MetricKey, Polarity] = {
     MetricKey.PLAN_BEFORE_EXECUTE: Polarity.HIGHER_IS_BETTER,
     MetricKey.TEST_OR_BUILD_AFTER_EDIT: Polarity.HIGHER_IS_BETTER,
     MetricKey.EDIT_REVISION: Polarity.HIGHER_IS_BETTER,
-    # Neither direction is a claim about the person: a human who redirects is engaged, and
-    # one who does not may be either trusting or absent.
-    MetricKey.HUMAN_REDIRECT: Polarity.NEUTRAL,
+    MetricKey.HUMAN_REDIRECT: Polarity.NEUTRAL,  # not redirecting is trust or absence
 }
 
 
@@ -254,8 +250,6 @@ def derive_metrics(
         window_first=min(starts).date() if starts else None,
         window_last=max(ends).date() if ends else None,
         rates={
-            # Polarity comes from METRIC_POLARITY rather than from these call sites, so the
-            # direction a renderer states is necessarily the one the interval was drawn on.
             MetricKey.PLAN_BEFORE_EXECUTE: _rate(
                 plan_n, plan_d, min_n.sessions, MetricKey.PLAN_BEFORE_EXECUTE
             ),

@@ -48,8 +48,6 @@ def derive_limitations(
         f"{facts.n_commits_by_subject} commits authored there by this person."
     )
 
-    # Sampling: the reader is told how many diffs were actually read, and how they were
-    # chosen, rather than being left to assume it was all of them.
     if judgment is not None and judgment.n_commits_sampled < judgment.n_commits_total:
         out.append(
             f"Diffs were read for {judgment.n_commits_sampled} of "
@@ -57,15 +55,12 @@ def derive_limitations(
             "plus a reproducible sample of the remainder seeded on the repository head."
         )
 
-    # Confounds, worst first. These are the reasons a number might be wrong, and they are
-    # the section the competitor's public surface has nothing equivalent to.
     order = {Severity.INVALIDATING: 0, Severity.WARN: 1, Severity.INFO: 2}
     for confound in sorted(facts.confounds, key=lambda c: order[c.severity]):
         if confound.severity is Severity.INFO:
             continue
         out.append(f"{confound.detail}")
 
-    # Suppressed facts: say which readings were withheld and why.
     suppressed = [f for f in facts.facts if f.status is FactStatus.SUPPRESSED_LOW_N]
     if suppressed:
         names = ", ".join(sorted(f.key for f in suppressed))
@@ -74,7 +69,6 @@ def derive_limitations(
             f"denominator ({names}). A rate that thin is not reported rather than rounded."
         )
 
-    # Session telemetry coverage.
     if metrics is None:
         out.append(
             "No session telemetry was collected, so nothing here reflects how this "
@@ -91,7 +85,7 @@ def derive_limitations(
             "could not be parsed and were excluded from the rates above."
         )
 
-    # Corroboration coverage — stated as a count, never as an accuracy claim.
+    # A count, never an accuracy claim (docs/plan.md q9).
     if corroboration is None:
         out.append(
             "Commits were not correlated with session activity, so no claim here is "
@@ -140,11 +134,10 @@ def derive_risks(judgment: JudgeResult | None) -> list[str]:
                 "understanding the context before drawing a conclusion."
             )
 
-    # Then whatever each dimension raised for itself.
     for finding in judgment.findings:
         out.extend(finding.risks_to_probe)
 
-    # Deduplicate while preserving order — the derived ones stay first.
+    # Order-preserving dedupe, so the derived risks stay ahead of the model's own.
     seen: set[str] = set()
     unique: list[str] = []
     for risk in out:

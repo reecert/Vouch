@@ -73,14 +73,11 @@ class AnthropicProvider:
 
     def is_available(self) -> bool:
         try:
-            import anthropic  # noqa: F401
+            import anthropic
         except ImportError:
             return False
-        # An unset ANTHROPIC_API_KEY does not mean there are no credentials: the SDK also
-        # resolves an `ant auth login` profile. Constructing the client is the real test.
+        # An unset ANTHROPIC_API_KEY is not proof of no credentials: the SDK reads a login too.
         try:
-            import anthropic
-
             anthropic.Anthropic()
         except Exception:
             return bool(os.getenv("ANTHROPIC_API_KEY"))

@@ -29,8 +29,7 @@ class SamplingPolicy:
     """How many commits the judge reads, and how they are chosen."""
 
     max_commits: int = 40
-    # Cited commits are the ones L1 already rests claims on; they are never sampled out.
-    always_include_cited: bool = True
+    always_include_cited: bool = True  # L1 already rests claims on those commits
 
     def fingerprint(self) -> str:
         return f"max{self.max_commits}-cited{int(self.always_include_cited)}"

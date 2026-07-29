@@ -18,18 +18,15 @@ from pathlib import Path
 
 from vouch.schemas import CommitRecord, RepoSnapshot
 
-# Field/record separators that will not appear in git identity or subject text.
-_FS = "\x1f"  # between fields
-_RS = "\x1e"  # between records
+# Separators that cannot appear in git identity or subject text.
+_FS = "\x1f"
+_RS = "\x1e"
 
-_TEST_RE = re.compile(r"(^|/)(tests?|test_)|_test\.|\.test\.|conftest\.py$")
 _REVERT_RE = re.compile(r"This reverts commit ([0-9a-f]{7,40})")
 
 DEFAULT_CACHE_DIR = Path(".vouch_cache")
 
-# Bumped whenever the parsed snapshot shape changes. Part of the cache filename so a stale
-# cache is a miss, never a silently-defaulted hydrate.
-SNAPSHOT_VERSION = 2
+SNAPSHOT_VERSION = 3
 
 
 def _git(repo_path: Path, *args: str) -> str:
@@ -39,11 +36,6 @@ def _git(repo_path: Path, *args: str) -> str:
         text=True,
         check=True,
     ).stdout
-
-
-def is_test_path(path: str) -> bool:
-    """True if ``path`` looks like a test file (dir named test(s)/, or *_test / test_*)."""
-    return bool(_TEST_RE.search(path))
 
 
 def resolve_repo(repo_url: str, cache_dir: Path | None = None) -> Path:
@@ -89,8 +81,7 @@ def _revert_map(repo_path: Path) -> dict[str, str]:
 
 def _parse_commits(repo_path: Path) -> list[CommitRecord]:
     reverts = _revert_map(repo_path)
-    # %aN/%aE are mailmap-resolved (git's own sanctioned identity aliasing); %cE/%cI carry
-    # the committer so L1 can spot a rebase-rewritten history.
+    # %aN/%aE are mailmap-resolved; %cE/%cI let L1 spot a rebase-rewritten history.
     fmt = f"--pretty=format:{_RS}%H{_FS}%aN{_FS}%aE{_FS}%aI{_FS}%cE{_FS}%cI{_FS}%s"
     raw = _git(repo_path, "log", "--no-merges", "--use-mailmap", "--name-status", fmt)
 
@@ -102,14 +93,10 @@ def _parse_commits(repo_path: Path) -> list[CommitRecord]:
         # The subject is last and may itself contain anything except our separators.
         sha, an, ae, aiso, ce, ciso, subj = header.split(_FS, 6)
         files: list[str] = []
-        tests: list[str] = []
         for line in rest.splitlines():
             if not line.strip():
                 continue
-            path = line.split("\t")[-1]  # last col handles A/M/D and renames
-            files.append(path)
-            if is_test_path(path):
-                tests.append(path)
+            files.append(line.split("\t")[-1])  # last col handles A/M/D and renames
         commits.append(
             CommitRecord(
                 sha=sha,
@@ -118,7 +105,6 @@ def _parse_commits(repo_path: Path) -> list[CommitRecord]:
                 authored_at=datetime.fromisoformat(aiso),
                 subject=subj,
                 files=files,
-                test_files=tests,
                 reverts_sha=reverts.get(sha),
                 committer_email=ce,
                 committed_at=datetime.fromisoformat(ciso),
@@ -153,8 +139,7 @@ def ingest(repo_url: str, cache_dir: Path | None = None) -> RepoSnapshot:
 
     cache_dir.mkdir(parents=True, exist_ok=True)
     key = hashlib.sha256(repo_url.encode()).hexdigest()[:16]
-    # The snapshot version is part of the cache key: when the parsed shape changes, old
-    # caches are ignored rather than silently rehydrating missing fields as defaults.
+    # SNAPSHOT_VERSION keys the file, so a shape change is a miss rather than a defaulted hydrate.
     snap_path = cache_dir / f"snap_v{SNAPSHOT_VERSION}_{key}_{head_sha}.json"
     if snap_path.is_file():
         return RepoSnapshot.model_validate_json(snap_path.read_text())
@@ -270,9 +255,8 @@ def blame_line_author(
 ) -> tuple[str, str] | None:
     """Return ``(author_email, blamed_sha)`` for ``file:line`` as of ``sha^``.
 
-    The primitive behind ``fixed_own_bug``: who authored the line a commit changed?
-    Returns ``None`` if the line has no prior state (pure addition, no parent) or the
-    file/line can't be blamed.
+    The single-line form of :func:`blame_ranges`, which is what L1 uses. Returns ``None``
+    if the line has no prior state (pure addition, no parent) or cannot be blamed.
     """
     try:
         out = _git(

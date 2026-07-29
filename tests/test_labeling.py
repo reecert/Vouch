@@ -54,8 +54,7 @@ from vouch.l4.schema import DimensionKey, Verdict
 
 SUBJECT = "alice@example.com"
 
-#: Repo-scoped and unsuppressed, so the rendering of a *present* metric is what is under
-#: test rather than the scope contract that would refuse it.
+#: Repo-scoped and unsuppressed, so a *present* metric's rendering is what is under test.
 _METRICS = SessionMetrics(
     scope=MetricScope.REPO,
     n_sessions=20,
@@ -66,9 +65,7 @@ _METRICS = SessionMetrics(
 )
 
 
-#: Facts written out by hand rather than extracted, so the render digest below depends on
-#: the render alone. Extracting them would make an extractor change look like a render
-#: change, and `extractor_version` already covers that.
+#: Hand-written, not extracted: the digest below must depend on the render alone.
 _RENDER_FIXTURE = RepoFacts(
     repo="fixture",
     head_sha="a" * 40,
@@ -84,9 +81,7 @@ _RENDER_FIXTURE = RepoFacts(
             interval=Interval(low=0.0, high=0.4295, low_level=0.8, high_level=0.95),
         ),
         Fact(
-            # The note is the reason alone, exactly as `_apply_suppression` writes it: a
-            # note that repeated the status is what produced the stutter this fixture now
-            # guards against.
+            # The note is the reason alone, exactly as `_apply_suppression` writes it.
             key="ownership_loop", status=FactStatus.NOT_ASSESSABLE,
             polarity=Polarity.HIGHER_IS_BETTER,
             note="subject authored 45/45 human commits (100%); 1 distinct human author(s)",
@@ -141,9 +136,6 @@ def _extract(tmp_path: Path, variant: str) -> RepoFacts:
     return extract_facts(snapshot, SUBJECT, repo)
 
 
-# --- blindness -----------------------------------------------------------------------------
-
-
 def test_the_harness_cannot_be_handed_a_judge_result() -> None:
     """Blindness is structural, not a convention someone remembers to follow.
 
@@ -165,9 +157,6 @@ def test_a_rendered_task_contains_no_verdict_language(facts) -> None:
     # The vocabulary appears once, as the menu of answers — never as an assertion.
     assert text.count("strong") == 1
     assert "the judge" not in text.lower()
-
-
-# --- the split is fixed before anyone looks ---------------------------------------------------
 
 
 def test_the_split_is_deterministic() -> None:
@@ -198,9 +187,6 @@ def test_the_holdout_share_is_roughly_as_declared() -> None:
     splits = [assign_split(r, s.key) for r in rows for s in DIMENSIONS]
     share = splits.count("holdout") / len(splits)
     assert abs(share - SPLIT_HOLDOUT_SHARE) < 0.06
-
-
-# --- what the labeller sees --------------------------------------------------------------------
 
 
 def test_a_thin_fact_is_shown_as_an_interval_not_a_zero(facts) -> None:
@@ -347,9 +333,6 @@ def test_a_commit_count_names_the_population_it_counts(tmp_path: Path) -> None:
     assert "human-authored commits (bots excluded)" in squash
 
 
-# --- what is not a judgement call is not offered as one ----------------------------------
-
-
 def test_a_dimension_with_no_input_layer_forces_the_answer(facts) -> None:
     """`planning_discipline` reads from L2 alone. No CLI run means nothing was looked at.
 
@@ -447,9 +430,6 @@ def test_pending_skips_what_is_already_labelled() -> None:
     assert len(pending) == len(DIMENSIONS) - 1
 
 
-# --- writing labels ------------------------------------------------------------------------------
-
-
 def test_a_label_is_written_into_the_pool_its_split_assigned(tmp_path: Path) -> None:
     path = tmp_path / "labels.yaml"
     path.write_text("train: []\nholdout: []\n")
@@ -488,8 +468,6 @@ def test_a_written_label_reloads_through_the_validator(tmp_path: Path) -> None:
     assert labels.total == 1
     assert labels.train[0].corpus_id == "hunter"
 
-
-# --- provenance: naming the code the judgement was made against -----------------------------
 
 _PROV = LabelProvenance(
     code_sha="0123456789abcdef",
@@ -578,8 +556,7 @@ def test_provenance_reads_this_repo(tmp_path: Path) -> None:
     assert len(prov.code_sha) == 40, "not a resolved git sha"
     assert prov.extractor_version and prov.l1_config
     assert prov.render_version == RENDER_VERSION
-    # A label does not depend on how the JUDGE is prompted, so there is still no field for
-    # that. `render_version` is the other thing entirely: what the human was shown.
+    # A label is a reading of evidence, not of a prompt, so there is still no field for one.
     assert "prompt_version" not in LabelProvenance.model_fields
 
 

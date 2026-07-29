@@ -63,8 +63,7 @@ __all__ = [
 
 IDENTITY_SCHEMA_VERSION = "repo-identity/1"
 
-#: Declared historical roots live here, relative to the repo root. Data, not code.
-IDENTITY_FILE = Path(".vouch") / "identity.yaml"
+IDENTITY_FILE = Path(".vouch") / "identity.yaml"  # declared roots are data, not code
 
 
 class PathOutcome(StrEnum):
@@ -238,7 +237,6 @@ class RepoIdentity:
         key = self._key(_real(raw))
 
         if (rel := self._under(key, self.canonical_key)) is not None:
-            # Ground truth: the filesystem says this path is in the repo.
             return PathOutcome.IN_REPO, PurePosixPath(rel).as_posix() if rel else None
 
         for root_key in self.historical_keys:
@@ -286,8 +284,6 @@ def resolve_identity(
     hist_keys: list[str] = []
     hist_display: list[str] = []
     for root in declared:
-        # Resolved against the canonical root, so `../Aiapp` means the sibling of THIS repo
-        # wherever the checkout now sits.
         resolved = _declared_root(canonical, root.path)
         k = key(resolved)
         if k in seen:
@@ -349,8 +345,7 @@ def discover_candidate_roots(
             continue
         outside.append(real)
 
-    # Pass 1 — every ancestor under which *some* path git recognises appears. The suffix
-    # below the ancestor is what git would have to know for it to be a former home.
+    # Pass 1 — every ancestor under which some git-recognised path appears.
     by_root: dict[str, RootCandidate] = {}
     for real in outside:
         parts = PurePosixPath(real).parts
@@ -363,9 +358,7 @@ def discover_candidate_roots(
             if len(cand.examples) < 3 and rel not in cand.examples:
                 cand.examples.append(rel)
 
-    # Pass 2 — score each candidate over *all* the paths beneath it, not just the hits
-    # that proposed it. A root where only a handful of names line up is a coincidence, and
-    # `share_known` is what makes that visible to the human reading the proposal.
+    # Pass 2 — score over *all* paths beneath a candidate, so a coincidence scores low.
     for root, cand in by_root.items():
         prefix = root.rstrip("/") + "/"
         seen: set[str] = set()

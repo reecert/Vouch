@@ -26,8 +26,7 @@ from vouch.l4.schema import (
     Verdict,
 )
 
-# Aliased on import: any module-level name starting with `Test` is collected by
-# pytest as a test class, and this one is an enum.
+# Aliased: pytest collects any module-level `Test*` name as a class, and this is an enum.
 from vouch.l4.schema import TestRelevance as RelevanceEnum
 
 

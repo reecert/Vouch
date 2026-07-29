@@ -37,12 +37,8 @@ __all__ = [
     "open_snapshot",
 ]
 
-#: Bumped when the snapshot layout changes, so an old directory is a miss rather than a
-#: silently different thing wearing the same digest.
-SNAPSHOT_VERSION = "l2-snap/1"
-
-#: Records what the digest cannot: the newest log mtime at the moment of freezing.
-MANIFEST = "snapshot.json"
+SNAPSHOT_VERSION = "l2-snap/1"  # part of the digest, so an old layout is a miss
+MANIFEST = "snapshot.json"  # records what the digest cannot: the newest log mtime
 
 _DIGEST_LEN = 16
 
@@ -69,8 +65,7 @@ def _index(source: Path) -> tuple[list[Path], str, datetime | None]:
         rel = path.relative_to(source).as_posix()
         stat = path.stat()
         content = hashlib.sha256(path.read_bytes()).hexdigest()
-        # Path and size as well as content: a file moved between sessions changes what the
-        # parse means even when the bytes are the same.
+        # Path and size too: a moved file changes what the parse means at identical bytes.
         hasher.update(f"{rel}\0{stat.st_size}\0{content}\0".encode())
         newest = stat.st_mtime if newest is None else max(newest, stat.st_mtime)
 
@@ -91,13 +86,9 @@ def snapshot_sessions(source: Path, cache_dir: Path) -> SessionSnapshot:
     files, digest, as_of = _index(source)
     root = cache_dir / "sessions" / digest
 
-    # A directory without a manifest was written by an older layout. Treat it as a miss
-    # and rewrite it, rather than half-reading something whose shape we no longer know.
+    # No manifest means an older layout: a miss, rather than a half-read of an unknown shape.
     if root.is_dir() and (root / MANIFEST).is_file():
-        # Same digest means same bytes, so re-copying would be work with no effect — and
-        # the recorded `as_of` is returned rather than the one just measured, so that a
-        # digest determines the whole snapshot. Touching a log without editing it would
-        # otherwise shift `as_of` under an unchanged digest.
+        # The recorded `as_of` is returned, so touching a log cannot shift it under one digest.
         return open_snapshot(digest, cache_dir)
 
     root.parent.mkdir(parents=True, exist_ok=True)
@@ -110,10 +101,7 @@ def snapshot_sessions(source: Path, cache_dir: Path) -> SessionSnapshot:
         target = staging / path.relative_to(source)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, target)
-    # `as_of` is recorded rather than recomputed later: it comes from modification times,
-    # and a copy does not carry those. Re-deriving it from the snapshot would report when
-    # the snapshot was taken, not how recent the logs in it are — and would make two reads
-    # of the same frozen bytes disagree, which is the property this module exists to hold.
+    # `as_of` is recorded now because the copy does not carry the source mtimes.
     (staging / MANIFEST).write_text(
         json.dumps(
             {

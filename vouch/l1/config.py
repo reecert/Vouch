@@ -8,6 +8,10 @@ Two rules govern what lives here:
   score. The product has no overall score, so there is nothing for weights to feed and they
   are gone. Dimensional readouts are reported side by side, never summed.
 
+:data:`FIX_KEYWORDS` is a deliberately conservative proxy, tuned to miss fixes phrased
+unusually rather than to invent them. L4 reads the diff and can say a keyword-matched commit
+was not actually a fix; it cannot recover one we never surfaced.
+
 Nothing here does I/O.
 """
 from __future__ import annotations
@@ -18,15 +22,7 @@ from dataclasses import asdict, dataclass, field
 
 __all__ = ["MinN", "Detection", "L1Config", "L1_CONFIG", "FIX_KEYWORDS"]
 
-# Subject-line markers for a defect fix. These are **stems**: the matcher anchors them to a
-# word start and allows any suffix, so "fix" catches fixes/fixed while "prefix", "suffix"
-# and "dispatch" are correctly not fix commits (the prototype's plain substring match read
-# "refactor prefix handling" as a bug fix).
-#
-# Deliberately conservative: this is a *proxy*, tuned to miss fixes phrased unusually
-# rather than to invent them. L4 reads the diff and can say a keyword-matched commit was
-# not actually a fix; it cannot recover one we never surfaced. A miss costs less than a
-# false positive.
+# Stems, matched at a word start: plain substring matching read "prefix" and "dispatch" as fixes.
 FIX_KEYWORDS: tuple[str, ...] = (
     "fix",
     "hotfix",
@@ -59,31 +55,18 @@ class MinN:
 class Detection:
     """Thresholds for the confound detectors."""
 
-    # returned-to-fix: a self-fix must land at least this long after the code it repairs,
-    # otherwise it is the same work session finishing, not a return.
-    return_gap_days: int = 14
-    # a test landing this soon after a fix counts as accompanying it.
+    return_gap_days: int = 14  # sooner than this, a self-fix is the same session finishing
     test_adjacency_hours: int = 24
 
-    # solo_repo: subject authored at least this share of all human commits.
     solo_authorship_share: float = 0.95
-    # squash_merge_history: share of commits whose subject ends in GitHub's " (#123)".
-    squash_marker_share: float = 0.30
-    # bot_dominated: share of commits authored by machines.
+    squash_marker_share: float = 0.30  # subjects ending in GitHub's " (#123)"
     bot_share: float = 0.20
-    # vendored_or_generated_bulk: share of file touches that are noise.
     noise_touch_share: float = 0.30
-    # rebase_rewritten_authorship: share of commits where committer date runs far ahead of
-    # author date. Rebase preserves the author date and rewrites the committer date, so a
-    # large gap across many commits means the history was replayed.
-    rebase_skew_share: float = 0.30
+    rebase_skew_share: float = 0.30  # rebase keeps the author date and rewrites the committer's
     rebase_skew_days: int = 1
-    # short_window: subject's activity spans fewer than this many days.
     short_window_days: int = 30
 
-    # Blame is one git call per (commit, file); a squashed 400-file commit would otherwise
-    # dominate runtime. Files are taken in sorted order so the cap is deterministic.
-    max_blamed_files_per_commit: int = 25
+    max_blamed_files_per_commit: int = 25  # blame is one git call per (commit, file)
 
 
 @dataclass(frozen=True)

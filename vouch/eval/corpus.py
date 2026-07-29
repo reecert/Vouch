@@ -54,13 +54,10 @@ __all__ = [
     "resolve_author",
 ]
 
-#: Length of the stored digest prefix. 12 hex = 48 bits: collisions across the few hundred
-#: authors of one repo are not a practical concern, and the full digest buys nothing since
-#: the address it covers is public in the repo being scanned anyway.
+#: 48 bits, over the few hundred authors of one repo. A guard against drift, not a secret.
 DIGEST_LEN = 12
 
-# Same separators and the same log shape as `vouch.ingest._parse_commits`, so a rank
-# computed here matches the counts the extractor will later derive from the snapshot.
+# The log shape `vouch.ingest._parse_commits` uses, so a rank here matches its counts.
 _FS = "\x1f"
 _RS = "\x1e"
 
@@ -98,9 +95,7 @@ class RepoSpec(BaseModel):
     repo: str
     head: str
     author: AuthorSelector
-    # Aliases are selectors too. Every list is empty today (see notes.aliases in the YAML),
-    # and this type is what keeps it that way if a later pass claims one: an alias is an
-    # address, and an address does not go in this file either.
+    # Selectors, not addresses: an alias is an address, and one does not go in this file.
     aliases: list[AuthorSelector] = Field(default_factory=list)
     measured: dict[str, Any] = Field(default_factory=dict)
     why: str = ""
@@ -228,7 +223,7 @@ def resolve_author(spec: RepoSpec, repo_path: Path) -> ResolvedAuthor:
             digest=selector.email_sha256,
         )
 
-    # Rank and digest disagree. Say exactly how, without printing anyone's address.
+    # Rank and digest disagree: say how, without printing anyone's address.
     found = [
         (i, email, n)
         for i, (email, n) in enumerate(ranked, 1)

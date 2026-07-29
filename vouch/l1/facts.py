@@ -64,7 +64,7 @@ class FactStatus(StrEnum):
     """Why a fact does or does not carry a value."""
 
     MEASURED = "measured"
-    SUPPRESSED_LOW_N = "suppressed_low_n"  # we looked; there wasn't enough to divide by
+    SUPPRESSED_LOW_N = "suppressed_low_n"
     NOT_ASSESSABLE = "not_assessable"  # a confound invalidates the measurement itself
 
 
@@ -133,9 +133,9 @@ class ConfoundKey(StrEnum):
 
 
 class Severity(StrEnum):
-    INFO = "info"  # worth stating; changes nothing
-    WARN = "warn"  # read the affected facts with caution
-    INVALIDATING = "invalidating"  # the affected facts are suppressed outright
+    INFO = "info"
+    WARN = "warn"
+    INVALIDATING = "invalidating"
 
 
 class BiasDirection(StrEnum):

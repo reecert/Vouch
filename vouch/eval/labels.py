@@ -47,9 +47,7 @@ __all__ = [
     "permitted_measures",
 ]
 
-#: `leaned_on` when the verdict rested on no measure at all — a forced answer, or a decline
-#: against evidence that was entirely suppressed. Spelled out rather than left as an empty
-#: list, because an empty list is what an unfilled field looks like.
+#: `leaned_on` when the verdict rested on nothing. Spelled out: an empty list reads as unfilled.
 NO_MEASURE = "none"
 
 
@@ -62,8 +60,7 @@ def permitted_measures(dimension: DimensionKey) -> set[str]:
     spec = next(s for s in DIMENSIONS if s.key is dimension)
     return {*spec.l1_facts, *(m.value for m in spec.l2_metrics), NO_MEASURE}
 
-#: Deliberately broad. A false positive here costs one rephrased `reason`; a false negative
-#: puts somebody's address in a public git history, where deleting it later is not enough.
+#: Broad on purpose: a false positive costs one rephrased `reason`, a false negative is a leak.
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
 
@@ -99,9 +96,7 @@ class DimensionLabel(BaseModel):
     dimension: DimensionKey
     verdict: Verdict
     reason: str  # REQUIRED, non-blank
-    #: Which measure(s) this verdict actually rested on. REQUIRED and non-empty; each entry
-    #: is a fact key or metric key this dimension declares, or `none` on its own where the
-    #: verdict rests on no measure at all (a forced answer, or a decline against silence).
+    #: Required, non-empty: a measure key this dimension declares, or `none` on its own.
     leaned_on: list[str]
 
     @field_validator("reason")
@@ -229,8 +224,7 @@ def load_labels(
 
     text = path.read_text()
 
-    # Checked against the raw bytes, before parsing. A field the schema would reject is
-    # still a leak the moment the file is committed, and comments are not parsed at all.
+    # Raw bytes, before parsing: a YAML comment is a leak the schema would never see.
     if found := sorted(set(_EMAIL_RE.findall(text))):
         raise LabelValidationError(
             f"{path}: contains {len(found)} email-shaped string(s) "
@@ -269,8 +263,7 @@ def load_labels(
         )
 
     if known_ids is not None:
-        # An id is only a join key if it joins. A typo would otherwise surface much later,
-        # as a row the harness silently could not score.
+        # An id is only a join key if it joins; a typo would surface as an unscored row.
         unknown = sorted({r.corpus_id for r in labels.all_rows()} - set(known_ids))
         if unknown:
             raise LabelValidationError(
@@ -278,9 +271,7 @@ def load_labels(
                 f"in the corpus: {unknown}."
             )
 
-    # An empty file needs no provenance — there is no result to attribute yet. The moment
-    # there is one, it must name the code it was made against, or the agreement number it
-    # eventually produces describes nothing in particular.
+    # An empty file has no result to attribute yet; one label in, the code must be named.
     if labels.total and not labels.metadata.code_sha:
         raise LabelValidationError(
             f"{path}: {labels.total} label(s) with no `metadata.code_sha`. A calibration "

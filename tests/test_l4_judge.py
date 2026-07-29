@@ -40,8 +40,7 @@ def repo_facts(tmp_path: Path):
 
 
 def _metrics(**rates) -> SessionMetrics:
-    # Repo-scoped, as a profile's telemetry must be: every dimension declares
-    # `MetricScope.REPO`, and machine-wide rates are refused rather than discounted.
+    # Repo-scoped, as every dimension declares: machine-wide rates are refused outright.
     return SessionMetrics(
         scope=MetricScope.REPO,
         n_sessions=20,

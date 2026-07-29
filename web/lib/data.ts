@@ -23,8 +23,7 @@ export function listProfileIds(): string[] {
 }
 
 export function loadProfile(id: string): Profile | null {
-  // Guard the path: `id` comes from the URL, and a share link must not be able to read
-  // an arbitrary file off the host.
+  // `id` comes from the URL: a share link must not read an arbitrary file off the host.
   if (!/^[a-f0-9]{8,64}$/.test(id)) return null;
   const file = path.join(PROFILE_DIR, `${id}.json`);
   if (!fs.existsSync(file)) return null;

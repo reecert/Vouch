@@ -30,11 +30,9 @@ from vouch.schemas import CommitRecord, RepoSnapshot
 
 __all__ = ["RepoStats", "compute_stats", "detect_confounds", "mask_email"]
 
-# GitHub's squash-merge convention appends the PR number to the subject line.
-_SQUASH_MARKER_RE = re.compile(r"\(#\d+\)\s*$")
+_SQUASH_MARKER_RE = re.compile(r"\(#\d+\)\s*$")  # GitHub appends the PR number on squash
 
-# Fact keys, kept here so a confound can name what it bears on without importing the
-# extractor (which imports this module).
+# Fact keys live here rather than in the extractor, which imports this module.
 F_OWNERSHIP_LOOP = "ownership_loop"
 F_REVERT_RATE = "revert_rate"
 F_TEST_ACCOMPANIES_FIX = "test_accompanies_fix"
@@ -97,9 +95,7 @@ def compute_stats(
 
     subject = [c for c in humans if identity.matches(c.author_email)]
 
-    # Noise share is measured over *human* commits only. A dependency bot's lockfile churn
-    # is already accounted for by bot_dominated; counting it here too would report the same
-    # problem twice and mask whether the human work itself is noise-heavy.
+    # Human commits only: bot lockfile churn is already reported as bot_dominated.
     n_touches = 0
     n_noise = 0
     for c in humans:
@@ -150,10 +146,6 @@ def detect_confounds(
     d = config.detection
     found: list[Confound] = []
 
-    # --- solo repo -------------------------------------------------------------------
-    # Ownership means "returns to fix *their own* bugs rather than leaving them". With no
-    # other human authors the predicate is vacuously true: there is nobody else's code to
-    # not fix. The measurement is not weak here, it is meaningless — hence INVALIDATING.
     share = _pct(stats.n_subject, stats.n_human)
     if stats.distinct_human_authors <= 1 or share >= d.solo_authorship_share:
         found.append(
@@ -171,15 +163,7 @@ def detect_confounds(
             )
         )
 
-    # --- squash-merge history --------------------------------------------------------
-    # Squashing collapses a PR's commits into one, authored by whoever merged. The
-    # intermediate fix-with-test commits that ownership_loop looks for stop existing.
-    #
-    # Detection rests solely on GitHub's " (#123)" subject convention. An earlier version
-    # also treated "zero merge commits across a long history" as evidence, but that cannot
-    # tell a squash-merged repo from a small project with a linear history and no PRs — it
-    # fired on a plain fixture. We would rather miss a squash-merged repo whose team writes
-    # its own subject lines than tell a reader to discount numbers that are fine.
+    # The marker alone: "no merge commits" cannot tell a squashed repo from a linear one.
     squash_share = _pct(stats.n_squash_marked, stats.n_human)
     if squash_share >= d.squash_marker_share:
         found.append(
@@ -199,9 +183,6 @@ def detect_confounds(
             )
         )
 
-    # --- bot noise -------------------------------------------------------------------
-    # Reported for its interaction with solo-repo: a repo that looks collaborative may be
-    # one human plus dependabot. Bot commits are already excluded from every fact.
     bot_share = _pct(stats.n_bot, stats.n_total)
     if bot_share >= d.bot_share:
         found.append(
@@ -218,7 +199,6 @@ def detect_confounds(
             )
         )
 
-    # --- vendored / generated / lockfile bulk ----------------------------------------
     noise_share = _pct(stats.n_noise_touches, stats.n_touches)
     if noise_share >= d.noise_touch_share:
         found.append(
@@ -236,7 +216,6 @@ def detect_confounds(
             )
         )
 
-    # --- rebase-rewritten authorship -------------------------------------------------
     skew_share = _pct(stats.n_rebase_skewed, stats.n_total)
     if skew_share >= d.rebase_skew_share:
         found.append(
@@ -254,7 +233,6 @@ def detect_confounds(
             )
         )
 
-    # --- shallow clone ---------------------------------------------------------------
     if stats.is_shallow:
         found.append(
             Confound(
@@ -270,9 +248,7 @@ def detect_confounds(
             )
         )
 
-    # --- unresolved identity aliases -------------------------------------------------
-    # Deliberately not auto-merged: merging on a name match would silently change the
-    # numbers on a guess. Surfaced so a human decides.
+    # Surfaced rather than auto-merged: a name match would move the numbers on a guess.
     if unclaimed_aliases:
         masked = ", ".join(mask_email(a) for a in unclaimed_aliases)
         found.append(
@@ -289,7 +265,6 @@ def detect_confounds(
             )
         )
 
-    # --- short activity window -------------------------------------------------------
     if stats.window_days is not None and stats.window_days < d.short_window_days:
         found.append(
             Confound(

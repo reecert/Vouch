@@ -31,6 +31,13 @@ say here", which is a claim, and the wrong one.
 only conclusive labels teaches nothing about overclaiming, which is the failure the whole
 quality bar exists to catch.
 
+**The rendering is part of what a label is a judgement of**, so :data:`RENDER_VERSION` is
+stamped on a label set and refused if it moves mid-round, exactly as the extractor version
+is. Bump it whenever what appears on screen changes, including wording — the harness once
+dropped a dimension's L2 metrics while `extractor_version` and `l1_config` stayed identical,
+because neither the numbers nor the config had changed. ``tests/test_labeling.py`` pins the
+rendered output against a digest, so changing the render without bumping this fails.
+
 **What is not a judgement call is not offered as one.** Whether a dimension *can* be
 assessed here is decided by :func:`vouch.l4.dimensions.assess_availability`, deterministically
 and before the evidence is drawn — the same function that decides it for the judge. When it
@@ -74,36 +81,14 @@ __all__ = [
     "append_label",
 ]
 
-#: Share of rows routed to the holdout. One third, so a twelve-row corpus times four
-#: dimensions leaves a holdout large enough to report and a train pool large enough to
-#: iterate against. Applied per (corpus_id, dimension), not per repo, so no single history
-#: lands entirely on one side.
+#: Applied per (corpus_id, dimension), not per repo, so no one history lands on one side.
 SPLIT_HOLDOUT_SHARE = 1 / 3
 
-#: The verdicts a human is entitled to reach by reading evidence. The other two are
-#: statements about whether there was anything to read, which `assess_availability` decides
-#: before the labeller sees the row — so they are forced when they apply and absent when
-#: they do not, never sitting on the menu as a third kind of thing to pick.
+#: What a human can reach by reading evidence; `assess_availability` settles the other two.
 JUDGEABLE_VERDICTS: tuple[Verdict, ...] = tuple(
     v for v in Verdict if v not in (Verdict.NOT_COLLECTED, Verdict.OUT_OF_SCOPE)
 )
 
-#: What drew the screen the labeller read. Stamped on a label set and refused if it moves
-#: mid-round, exactly as the extractor version is.
-#:
-#: This exists because of a measured failure, not on principle: the harness rendered a
-#: dimension's L1 facts and dropped its L2 metrics, so labels made before that fix answer a
-#: narrower question than labels made after it — while `extractor_version` and `l1_config`
-#: stayed identical, because neither the numbers nor the config had changed. The rendering
-#: is part of what a label is a judgement of.
-#:
-#: **Bump this whenever what appears on screen changes**, including wording. `1` was the
-#: first version that renders both layers, states polarity, formats intervals at a fixed
-#: precision, and forces the verdict where availability settles it. `2` fixes two things a
-#: pilot run surfaced: a fact whose status was printed twice, and two commit counts on
-#: adjacent lines whose denominators counted different populations without saying so.
-#: ``tests/test_labeling.py`` pins the rendered output against a digest so that changing
-#: the render without bumping this fails.
 RENDER_VERSION = "label-render/2"
 
 
@@ -117,13 +102,11 @@ class LabelTask:
     title: str
     question: str
     evidence: list[str] = field(default_factory=list)
-    #: The session-trail half. Kept separate from ``evidence`` rather than concatenated so
-    #: that a dimension reading from both layers cannot render as though it read from one.
+    #: Separate from ``evidence``: a two-layer dimension must not render as a one-layer one.
     session: list[str] = field(default_factory=list)
     confounds: list[str] = field(default_factory=list)
     corroboration: list[str] = field(default_factory=list)
-    #: The answers this task will accept. Narrowed to one when availability, not judgement,
-    #: settles the dimension; otherwise every verdict a human is entitled to reach.
+    #: Narrowed to one when availability, not judgement, settles the dimension.
     permitted: tuple[Verdict, ...] = JUDGEABLE_VERDICTS
     #: Why the answer is forced, in the labeller's terms. Empty when it is not.
     forced_reason: str = ""
@@ -146,10 +129,7 @@ def assign_split(corpus_id: str, dimension: DimensionKey) -> str:
     return "holdout" if fraction < SPLIT_HOLDOUT_SHARE else "train"
 
 
-#: How each polarity reads to a human. `neutral` is spelled out rather than left blank: a
-#: missing note is indistinguishable from a forgotten one, and `commit_scoping` genuinely
-#: has no better direction — small commits are focused or trivial, large ones thorough or
-#: sprawling.
+#: `neutral` is spelled out: a missing note reads as a forgotten one.
 _DIRECTION = {
     Polarity.HIGHER_IS_BETTER: "higher is better",
     Polarity.LOWER_IS_BETTER: "lower is better",
@@ -197,10 +177,7 @@ def _fact_line(facts: RepoFacts, key: str) -> str:
         return f"  {key}: {band}  (point estimate {fact.value}{unit}, from {denom}){way}"
     if fact.status is FactStatus.SUPPRESSED_LOW_N:
         return f"  {key}: {band} from {denom} — too thin for a point estimate{way}"
-    # The status is stated here and the note explains it. L1 used to open the note with the
-    # status as well, which rendered as "not assessable — not assessable here — subject
-    # authored…": the reason, the only part carrying information, sat behind two identical
-    # phrases. The note is the explanation; saying it once is this line's job.
+    # This line states the status, so `note` carries the reason alone.
     return f"  {key}: not assessable — {fact.note}"
 
 
@@ -256,11 +233,7 @@ def build_task(
     evidence = [_fact_line(facts, key) for key in spec.l1_facts]
     if not spec.l1_facts:
         evidence = ["  (no commit-trail facts feed this dimension)"]
-    # Both counts name their population. `n_commits_total` counts every author including
-    # bots, while the confound lines a few rows below quote human-only denominators — so
-    # "671 of 1482 commits" sat directly above "1087 of 1335", two denominators over two
-    # different populations with nothing on screen relating them. A labeller reading them as
-    # the same population gets the subject's share of the repo wrong in either direction.
+    # Both counts name their population: the confound lines below quote human-only ones.
     evidence.append(
         f"  subject activity: {facts.n_commits_by_subject} commits by the subject, out of "
         f"{facts.n_commits_total} in this repo by every author (bots included), "
@@ -277,10 +250,7 @@ def build_task(
         for c in relevant
     ] or ["  (none bearing on this dimension)"]
 
-    # The same call the judge makes, with the same inputs the labeller can see. Commit
-    # judgments are zero by construction: they are L4's reading of the diffs, and no diff
-    # text reaches this harness — so a dimension whose only remaining evidence would have
-    # been the model's own diff reading is, to a labeller, unassessable.
+    # The judge's own call. Zero commit judgments by construction: no diff reaches a labeller.
     availability = assess_availability(spec, facts, metrics, n_commit_judgments=0)
     permitted, forced_reason = JUDGEABLE_VERDICTS, ""
     if availability.forces_out_of_scope:
@@ -447,14 +417,11 @@ def append_label(
             "dimension": dimension.value,
             "verdict": verdict.value,
             "reason": reason.strip(),
-            # Which measure the judgement rested on. The combining rule for a multi-fact
-            # dimension is deliberately undefined; this is what makes that visible in the
-            # corpus rather than hidden inside it.
+            # The combining rule for a multi-fact dimension is deliberately undefined.
             "leaned_on": list(leaned_on),
         }
     ]
-    # Provenance first: it is the thing that decides whether anything below it still means
-    # what it meant when it was written, so it should be the first thing a reader sees.
+    # Provenance first: it decides whether anything below it still means what it meant.
     ordered = {k: data[k] for k in ("metadata", "train", "holdout") if k in data}
     ordered.update({k: v for k, v in data.items() if k not in ordered})
     path.write_text(yaml.safe_dump(ordered, sort_keys=False, allow_unicode=True))

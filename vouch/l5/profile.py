@@ -47,9 +47,7 @@ __all__ = [
 
 L5_SCHEMA_VERSION = "l5/1"
 
-#: The report's dimension order is no longer a constant — it is a function of how much
-#: evidence each dimension actually has. See :mod:`vouch.l5.ordering`. Verification
-#: discipline still leads among equals, for the reason it always did.
+#: The tie-break only: :mod:`vouch.l5.ordering` ranks by evidence first.
 DIMENSION_ORDER = [spec.key for spec in DIMENSIONS]
 
 
@@ -91,10 +89,7 @@ class Provenance(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     l1_schema: str = ""
-    # The frozen session snapshot the corroboration and telemetry were read from.
-    # Quoting it is what makes "re-run this and get the same document" checkable:
-    # `vouch profile --as-of <digest>` reproduces the run, and a different digest is
-    # the honest explanation for a profile that came out different.
+    # The digest `vouch profile --as-of` takes, which is what makes a re-run checkable.
     session_snapshot: str = ""
     judge_model: str = ""
     prompt_version: str = ""
@@ -134,9 +129,6 @@ class Profile(BaseModel):
     @property
     def share_path(self) -> str:
         return f"/p/{self.profile_id}"
-
-
-
 
 
 def build_profile(

@@ -65,8 +65,6 @@ class MockJudgeProvider:
     def is_available(self) -> bool:
         return True
 
-    # -- helpers ---------------------------------------------------------------------
-
     def _real_locator(self) -> Locator:
         if self.allowlist and self.allowlist.pairs:
             sha, path = sorted(self.allowlist.pairs)[0]
@@ -104,8 +102,6 @@ class MockJudgeProvider:
                         locators=[self._real_locator()],
                     )
                 ]
-
-    # -- provider protocol -----------------------------------------------------------
 
     def complete(self, system: str, user: str, schema: type[T]) -> T:
         self.calls += 1

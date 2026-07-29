@@ -30,13 +30,11 @@ from vouch.l4.schema import DimensionFinding, DimensionKey, Verdict
 
 __all__ = ["CONCLUDED", "evidence_strength", "order_findings"]
 
-#: Verdicts that reached a conclusion about the subject, as opposed to declining to.
-#: `contradicted` belongs here: "the evidence points the other way" is a finding.
+#: `contradicted` belongs here: "the evidence points the other way" is a conclusion.
 CONCLUDED = frozenset(
     {Verdict.STRONG, Verdict.MODERATE, Verdict.LIMITED, Verdict.CONTRADICTED}
 )
 
-#: The old fixed order, retained as the tie-break. See the module docstring.
 _FALLBACK_ORDER = {spec.key: i for i, spec in enumerate(DIMENSIONS)}
 
 
@@ -72,9 +70,7 @@ def evidence_strength(
     the top of the report.
     """
     scoped = metrics is not None and metrics.scope is spec.scope
-    # A layer that was never collected is not evidence this dimension failed to produce.
-    # Counting absent L2 metrics against it would rank dimensions by whether the user
-    # happened to run the session CLI, which is a fact about the run, not the subject.
+    # Uncollected L2 counts against nobody: that would rank on whether the CLI was run.
     declared = len(spec.l1_facts) + (len(spec.l2_metrics) if scoped else 0)
     if declared == 0:
         return 0.0
