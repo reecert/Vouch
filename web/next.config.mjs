@@ -1,6 +1,12 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  output: "export",  // a profile is a frozen document, so every page pre-renders
+  output: "standalone",
+  images: {
+    remotePatterns: [
+      { protocol: "https", hostname: "avatars.githubusercontent.com" },
+      { protocol: "https", hostname: "github.com" },
+    ],
+  },
 };
 
 export default nextConfig;

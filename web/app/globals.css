@@ -1,5 +1,85 @@
 @import "tailwindcss";
 
-:root {
-  color-scheme: light dark;
+@layer base {
+  :root {
+    color-scheme: light;
+    --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+  }
+  
+  body {
+    background-color: #fafafa;
+    color: #09090b;
+    font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  }
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+/* Vouch Tactile Cards & Rails */
+.vouch-card {
+  background-color: #ffffff;
+  border: 1px solid #e4e4e7;
+  box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.03);
+  transition: all 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+.vouch-card:hover {
+  border-color: #d4d4d8;
+  box-shadow: 0 4px 16px -4px rgba(0, 0, 0, 0.06);
+}
+
+.section-rail {
+  position: relative;
+  border: 1px solid #e4e4e7;
+  background-color: #ffffff;
+}
+
+.section-rail-grid {
+  background-size: 24px 24px;
+  background-image: 
+    linear-gradient(to right, rgba(228, 228, 231, 0.4) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(228, 228, 231, 0.4) 1px, transparent 1px);
+}
+
+.corner-node {
+  position: relative;
+}
+
+.corner-node::before {
+  content: "+";
+  position: absolute;
+  top: -9px;
+  left: -9px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 400;
+  color: #a1a1aa;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.corner-node::after {
+  content: "+";
+  position: absolute;
+  top: -9px;
+  right: -9px;
+  font-family: var(--font-mono);
+  font-size: 14px;
+  font-weight: 400;
+  color: #a1a1aa;
+  pointer-events: none;
+  z-index: 10;
+}
+
+.glass-nav {
+  background-color: rgba(255, 255, 255, 0.88);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
