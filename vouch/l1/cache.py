@@ -16,7 +16,12 @@ unlikely:
 
 * the repo and its **pinned HEAD** — a moving branch is a different measurement;
 * the **subject identity**, canonical address plus resolved aliases;
-* :data:`EXTRACTOR_VERSION`, bumped by hand when the computation changes;
+* :data:`EXTRACTOR_VERSION`, bumped by hand whenever the *computation* changes — a
+  predicate, a blame rule, a new fact, a changed interval, or the wording of a `detail` or
+  `note`, which are payload read verbatim by a labeller. Distinct from ``SCHEMA_VERSION``,
+  which describes the output's shape: a fix that changes what `ownership_loop` counts leaves
+  the shape identical and every cached value wrong. When in doubt bump it, the cost of a
+  spurious miss is one re-run;
 * ``L1Config.fingerprint()``, which already covers every threshold.
 
 A miss is silent and cheap. A *wrong hit* would be a golden file's worth of damage, so
@@ -38,11 +43,7 @@ __all__ = [
     "cached_extract",
 ]
 
-#: Bump when the *computation* changes — a predicate, a blame rule, a new fact, a changed
-#: interval. Distinct from `SCHEMA_VERSION`, which describes the output's shape: a fix that
-#: changes what `ownership_loop` counts leaves the shape identical and every cached value
-#: wrong. When in doubt, bump it; the cost of a spurious miss is one re-run.
-EXTRACTOR_VERSION = "l1-extract/2"
+EXTRACTOR_VERSION = "l1-extract/3"
 
 _KEY_LEN = 24
 

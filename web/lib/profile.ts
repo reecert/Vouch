@@ -78,6 +78,8 @@ export interface Confound {
 
 export interface Provenance {
   l1_schema: string;
+  /** Absent on profiles built before the session snapshot was recorded. */
+  session_snapshot?: string;
   judge_model: string;
   prompt_version: string;
   downgrades: string[];
@@ -123,11 +125,7 @@ export const VERDICT_LABELS: Record<Verdict, string> = {
   contradicted: "Contradicted",
 };
 
-/**
- * Declining verdicts are styled neutrally, not as warnings. "Insufficient evidence" is a
- * normal, frequent outcome of an honest profile — rendering it in alarm colours would
- * teach readers to read it as a mark against the candidate, which it is not.
- */
+/** Declining verdicts are neutral, never alarm colours: they are not a mark against anyone. */
 export const VERDICT_STYLES: Record<Verdict, string> = {
   strong:
     "bg-emerald-50 text-emerald-900 ring-emerald-600/20 dark:bg-emerald-950 dark:text-emerald-100 dark:ring-emerald-400/20",

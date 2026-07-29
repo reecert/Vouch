@@ -10,11 +10,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# Provider SDKs are lazy-imported behind JudgeProvider — install only what you use.
-# The deterministic core (ingest/extract) and the test suite need none of these.
-# The judge. Free-tier providers are deliberately absent: sending real diffs and derived
-# behavioural metrics about a named individual to a train-on-input tier is not defensible
-# in a product (docs/plan.md open question 5).
+# Lazy-imported behind JudgeProvider; no free tier, which may train on the diffs we send.
 providers = [
     "anthropic>=0.40",
 ]
@@ -24,14 +20,13 @@ dev = [
 ]
 
 [project.scripts]
-vouch = "cli:app"
+vouch = "vouch.cli:app"
 
 [build-system]
 requires = ["setuptools>=68"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-py-modules = ["cli"]
 packages = [
     "vouch",
     "vouch.ingest",
@@ -39,6 +34,7 @@ packages = [
     "vouch.l2",
     "vouch.l3",
     "vouch.l4",
+    "vouch.l5",
     "vouch.eval",
 ]
 

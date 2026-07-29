@@ -28,8 +28,7 @@ from vouch.l2.payload import (
     bucket_for,
 )
 
-# Fields allowed to be plain strings, because their values are constants defined in our
-# code and can never take a value read from a log.
+# Strings whose values are constants in this codebase, never a value read from a log.
 CONSTANT_STRING_FIELDS = frozenset({"schema_version", "parser_version", "log_format"})
 
 SCALARS = (int, float, bool, date, type(None))

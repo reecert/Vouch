@@ -6,7 +6,7 @@
         "followup_latency",
         "commit_scoping"
       ],
-      "detail": "7/14 commit subjects carry a squash marker (50%). Squash-merging collapses each branch into a single commit attributed to the merger, so individual fix-and-test commits are not visible and commits look larger than the work behind them.",
+      "detail": "7 of 14 human-authored commits (bots excluded) carry a squash marker in their subject line (50%). Squash-merging collapses each branch into a single commit attributed to the merger, so individual fix-and-test commits are not visible and commits look larger than the work behind them.",
       "direction": "understates",
       "key": "squash_merge_history",
       "severity": "warn"

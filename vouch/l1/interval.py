@@ -59,24 +59,11 @@ __all__ = [
     "z_for",
 ]
 
-#: Confidence level for the bound that would support a *favourable* reading. Lower, so a
-#: flattering claim is reachable on ordinary evidence.
-LENIENT_LEVEL = 0.80
+LENIENT_LEVEL = 0.80  # the bound carrying a favourable reading
+STRICT_LEVEL = 0.95  # the bound carrying an unfavourable one
 
-#: Confidence level for the bound that would support an *unfavourable* reading. Higher, so
-#: a damning claim has to be earned. See the module docstring for why these differ.
-STRICT_LEVEL = 0.95
-
-
-#: How many significant figures an interval is published at. Two, because that is roughly
-#: what these intervals actually carry: a Wilson bound off a denominator of five is not
-#: precise to a third digit, and printing one would be the same overstatement in miniature
-#: that the intervals exist to prevent.
-SIGNIFICANT_FIGURES = 2
-
-#: A hard cap on decimal places, so a bound near zero produces a readable number rather than
-#: a run of zeros. Reached only by intervals that are already saying "essentially none".
-_MAX_DECIMALS = 6
+SIGNIFICANT_FIGURES = 2  # a Wilson bound off n=5 is not precise to a third digit
+_MAX_DECIMALS = 6  # caps the run of zeros a near-zero bound would otherwise print
 
 
 def format_range(low: float, high: float, sig: int = SIGNIFICANT_FIGURES) -> str:
@@ -235,8 +222,7 @@ def median_interval(values: list[float], level: float = STRICT_LEVEL) -> Interva
         return None
     ordered = sorted(values)
     n = len(ordered)
-    # Normal approximation to the binomial rank, the standard construction. Clamped into
-    # range so tiny samples give the widest available interval rather than an error.
+    # Ranks are clamped so a tiny sample widens the interval instead of raising.
     z = z_for(level)
     half = z * math.sqrt(n) / 2.0
     lower_rank = max(0, math.floor(n / 2.0 - half))

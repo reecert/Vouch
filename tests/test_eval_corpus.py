@@ -25,13 +25,13 @@ from vouch.eval.corpus import (
     resolve_aliases,
     resolve_author,
 )
+from vouch.l4.dimensions import DIMENSIONS
 
 DEPENDABOT = ("dependabot[bot]", "49699333+dependabot[bot]@users.noreply.github.com")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CORPUS_PATH = REPO_ROOT / "eval" / "repos.yaml"
 
-# Any address-shaped token. Deliberately broad: the point is to catch a slip, not to parse
-# RFC 5322.
+# Broad on purpose: this catches a slip, it does not parse RFC 5322.
 _EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
 
@@ -127,6 +127,7 @@ def test_a_plaintext_author_is_rejected_by_the_schema(tmp_path: Path) -> None:
         yaml.safe_dump(
             {
                 "schema_version": "eval/repos/1",
+                "name": "fixture corpus",
                 "repos": [
                     {
                         "id": "x",
@@ -152,12 +153,29 @@ def test_duplicate_ids_are_rejected(tmp_path: Path) -> None:
         "head": "HEAD",
         "author": {"by": "commit_rank", "rank": 1, "email_sha256": email_digest(ALICE[1])},
     }
-    path.write_text(yaml.safe_dump({"schema_version": "eval/repos/1", "repos": [row, row]}))
-    with pytest.raises(CorpusError, match="duplicate"):
+    path.write_text(
+        yaml.safe_dump(
+            {"schema_version": "eval/repos/1", "name": "fixture corpus", "repos": [row, row]}
+        )
+    )
+    # The full phrase: `tmp_path` holds this test's name, so a bare "duplicate" always matches.
+    with pytest.raises(CorpusError, match="duplicate corpus id"):
         load_corpus(path)
 
 
-# ---- the invariant, asserted against the real file -------------------------------------
+def test_a_corpus_that_does_not_name_itself_is_refused(tmp_path: Path) -> None:
+    """A number's provenance is the name it is quoted under.
+
+    "The eval corpus" is not a description of anything: this one is public repositories,
+    which have no session telemetry and never will, so an agreement number measured here
+    is about the commit-trail half of the judge and nothing else. The name is the only
+    field that travels with a citation, so a corpus without one does not load.
+    """
+    path = tmp_path / "repos.yaml"
+    path.write_text(yaml.safe_dump({"schema_version": "eval/repos/1", "repos": []}))
+
+    with pytest.raises(CorpusError, match="name"):
+        load_corpus(path)
 
 
 def test_the_committed_corpus_contains_no_address() -> None:
@@ -182,8 +200,7 @@ def test_every_test_named_in_the_privacy_note_exists() -> None:
     """
     note = yaml.safe_load(CORPUS_PATH.read_text())["notes"]["privacy"]
 
-    # `path::test_x`, `path::Class::test_x`, and the `...::test_x` shorthand, which carries
-    # the previously named file forward exactly as it reads.
+    # `path::test_x`, `path::Class::test_x`, and `...::test_x` carrying the last file forward.
     cited, current = [], None
     for path, name in re.findall(
         r"(tests/\S+?\.py|\.\.\.)::(?:\w+::)?(test_\w+)", note
@@ -199,6 +216,41 @@ def test_every_test_named_in_the_privacy_note_exists() -> None:
         if f"def {name}(" not in (REPO_ROOT / path).read_text()
     ]
     assert not missing, f"notes.privacy cites tests that do not exist: {missing}"
+
+
+def test_the_corpus_declares_its_coverage_and_is_right() -> None:
+    """Every row is a public repo, so no row can carry L2 — and the file says which
+    dimensions that leaves it able to calibrate.
+
+    Checked against `DIMENSIONS` rather than trusted, because the declaration is prose's
+    job everywhere else in this file and prose cannot notice when a dimension gains a
+    layer. If `ownership` ever reads a session metric, this corpus stops calibrating it
+    fully and this test is what says so — before an agreement number is quoted as if
+    nothing had changed.
+    """
+    corpus = load_corpus(CORPUS_PATH)
+
+    for spec in DIMENSIONS:
+        if not spec.l2_metrics:
+            expected = "full"  # nothing it reads from is missing here
+        elif not spec.l1_facts:
+            expected = "none"  # L2 alone: every row is forced not_collected
+        else:
+            expected = "l1_half"
+        assert corpus.calibrates.get(spec.key.value) == expected, (
+            f"{spec.key.value} is declared {corpus.calibrates.get(spec.key.value)!r} in "
+            f"{CORPUS_PATH.name}, but its evidence layers make it {expected!r}"
+        )
+
+    assert set(corpus.calibrates) == {spec.key.value for spec in DIMENSIONS}
+
+
+def test_the_corpus_name_carries_the_limit_not_just_a_label() -> None:
+    """The name is what a citation quotes, so the constraint has to be inside it."""
+    corpus = load_corpus(CORPUS_PATH)
+
+    assert "L1" in corpus.name
+    assert "session telemetry" in corpus.name
 
 
 def test_the_target_shape_axis_is_present_and_paired() -> None:

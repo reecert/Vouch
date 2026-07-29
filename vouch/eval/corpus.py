@@ -54,13 +54,10 @@ __all__ = [
     "resolve_author",
 ]
 
-#: Length of the stored digest prefix. 12 hex = 48 bits: collisions across the few hundred
-#: authors of one repo are not a practical concern, and the full digest buys nothing since
-#: the address it covers is public in the repo being scanned anyway.
+#: 48 bits, over the few hundred authors of one repo. A guard against drift, not a secret.
 DIGEST_LEN = 12
 
-# Same separators and the same log shape as `vouch.ingest._parse_commits`, so a rank
-# computed here matches the counts the extractor will later derive from the snapshot.
+# The log shape `vouch.ingest._parse_commits` uses, so a rank here matches its counts.
 _FS = "\x1f"
 _RS = "\x1e"
 
@@ -98,19 +95,32 @@ class RepoSpec(BaseModel):
     repo: str
     head: str
     author: AuthorSelector
-    # Aliases are selectors too. Every list is empty today (see notes.aliases in the YAML),
-    # and this type is what keeps it that way if a later pass claims one: an alias is an
-    # address, and an address does not go in this file either.
+    # Selectors, not addresses: an alias is an address, and one does not go in this file.
     aliases: list[AuthorSelector] = Field(default_factory=list)
     measured: dict[str, Any] = Field(default_factory=dict)
     why: str = ""
 
 
 class Corpus(BaseModel):
+    """A set of rows, and — required — what a number measured over them is about.
+
+    ``name`` has no default. A corpus of public repositories can only ever calibrate the
+    half of the pipeline that reads git, and an agreement number quoted as "the eval
+    corpus" carries none of that: it reads as a statement about the judge, which is what
+    everyone downstream will take it for. The name is the one field that travels with every
+    citation, so the limit lives in it.
+
+    ``calibrates`` says the same thing per dimension, in a form a test can check against
+    :data:`vouch.l4.dimensions.DIMENSIONS` — the prose in ``notes`` cannot notice when a
+    dimension gains a layer, and this can.
+    """
+
     model_config = ConfigDict(extra="forbid")
 
     schema_version: str
+    name: str = Field(min_length=1)
     measured_at_config: str = ""
+    calibrates: dict[str, Literal["full", "l1_half", "none"]] = Field(default_factory=dict)
     repos: list[RepoSpec] = Field(default_factory=list)
     notes: dict[str, str] = Field(default_factory=dict)
 
@@ -213,7 +223,7 @@ def resolve_author(spec: RepoSpec, repo_path: Path) -> ResolvedAuthor:
             digest=selector.email_sha256,
         )
 
-    # Rank and digest disagree. Say exactly how, without printing anyone's address.
+    # Rank and digest disagree: say how, without printing anyone's address.
     found = [
         (i, email, n)
         for i, (email, n) in enumerate(ranked, 1)

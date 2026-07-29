@@ -69,9 +69,6 @@ def repo(tmp_path: Path) -> Path:
     return r
 
 
-# --- the rename -----------------------------------------------------------------------
-
-
 def test_a_repo_that_moved_corroborates_nothing_until_the_move_is_declared(
     tmp_path: Path, repo: Path
 ) -> None:
@@ -180,9 +177,6 @@ def test_a_relative_declaration_is_not_resolved_against_the_process_cwd(
     )
 
 
-# --- spelling, symlinks, case ----------------------------------------------------------
-
-
 def test_a_root_declared_under_a_different_spelling_is_not_a_second_root(
     tmp_path: Path, repo: Path
 ) -> None:
@@ -209,9 +203,6 @@ def test_a_path_under_a_similarly_named_sibling_is_outside(repo: Path) -> None:
     """`repo-old/` is not under `repo/`, whatever a prefix comparison thinks."""
     identity = resolve_identity(repo)
     assert identity.relativize(f"{repo}-old/src/a.py", None)[0] is PathOutcome.OUTSIDE
-
-
-# --- relative paths --------------------------------------------------------------------
 
 
 def test_a_relative_path_resolves_against_the_session_cwd(
@@ -290,9 +281,6 @@ def test_the_cwd_in_effect_is_the_last_one_recorded(tmp_path: Path, repo: Path) 
     assert coverage.n_outside == 1
 
 
-# --- the ledger ------------------------------------------------------------------------
-
-
 def test_the_report_carries_the_unresolved_count(tmp_path: Path, repo: Path) -> None:
     """Coverage that drops silently is a defect. This is the loud part."""
     logs = tmp_path / "logs"
@@ -305,9 +293,6 @@ def test_the_report_carries_the_unresolved_count(tmp_path: Path, repo: Path) -> 
     )
     assert report.path_coverage.n_unresolvable == 1
     assert report.n_corroborated == 0
-
-
-# --- discovery is a proposal ------------------------------------------------------------
 
 
 def test_discovery_proposes_a_root_but_the_join_does_not_use_it(

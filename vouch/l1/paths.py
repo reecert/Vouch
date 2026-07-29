@@ -27,7 +27,6 @@ class PathKind(StrEnum):
     DOCS = "docs"
 
 
-# Exact filenames that are dependency lockfiles — machine-authored, high churn, zero signal.
 _LOCKFILES = frozenset(
     {
         "package-lock.json",
@@ -50,7 +49,6 @@ _LOCKFILES = frozenset(
     }
 )
 
-# Directory names that mean "not our code" wherever they appear in the path.
 _VENDOR_DIRS = frozenset(
     {
         "vendor",
@@ -67,7 +65,6 @@ _VENDOR_DIRS = frozenset(
     }
 )
 
-# Directory names that mean "build output / machine-written".
 _GENERATED_DIRS = frozenset(
     {
         "dist",
@@ -85,12 +82,10 @@ _GENERATED_DIRS = frozenset(
     }
 )
 
-# Directory names that mean "test".
 _TEST_DIRS = frozenset({"test", "tests", "spec", "specs", "__tests__", "testdata", "e2e"})
 
 _DOC_DIRS = frozenset({"doc", "docs"})
 
-# Filename patterns for generated artifacts.
 _GENERATED_FILE_RE = re.compile(
     r"""
     \.min\.(js|css)$
@@ -107,7 +102,6 @@ _GENERATED_FILE_RE = re.compile(
     re.VERBOSE | re.IGNORECASE,
 )
 
-# Filename patterns for tests.
 _TEST_FILE_RE = re.compile(
     r"""
     ^test_[^/]*\.py$
@@ -143,7 +137,6 @@ def classify(path: str) -> PathKind:
     lower = name.lower()
     dirs = {s.lower() for s in segs[:-1]}
 
-    # "Not our code" and "not hand-written" dominate — check directories first.
     if dirs & _VENDOR_DIRS:
         return PathKind.VENDORED
     if dirs & _GENERATED_DIRS:

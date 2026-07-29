@@ -22,10 +22,7 @@ class Step:
     write: dict[str, str] = field(default_factory=dict)  # path -> full content
     delete: list[str] = field(default_factory=list)
     body: str = ""
-    # Committer date, when it must differ from the author date. Rebase preserves the
-    # author date and rewrites the committer date, so a fixture that sets this simulates
-    # a replayed history for the rebase confound detector.
-    committer_date: str | None = None
+    committer_date: str | None = None  # set it apart from `date` to simulate a rebase
 
 
 def _run(path: Path, *args: str, env: dict[str, str] | None = None) -> str:

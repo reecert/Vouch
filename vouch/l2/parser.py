@@ -55,15 +55,9 @@ __all__ = [
     "default_log_dir",
 ]
 
-# Bumped whenever the parsing rules change. Travels with every uploaded payload so a
-# metric can be traced to the code that derived it.
-PARSER_VERSION = "l2-parser/1"
+PARSER_VERSION = "l2-parser/1"  # travels with the payload, so a metric names its parser
+LOG_FORMAT = "claude-code/jsonl-2026-07"  # the log shape this was written against
 
-# The log shape this parser was written against. If a future log
-# stops matching, that is a fact worth reporting rather than papering over.
-LOG_FORMAT = "claude-code/jsonl-2026-07"
-
-# Record types we understand. Anything else is counted as unrecognised, not dropped.
 KNOWN_RECORD_TYPES = frozenset(
     {
         "user",
@@ -85,25 +79,15 @@ KNOWN_RECORD_TYPES = frozenset(
     }
 )
 
-# Record types that must appear for a file to be a session log at all.
 REQUIRED_RECORD_TYPES = frozenset({"user", "assistant"})
-
-# Above this share of unparseable lines the file is not what we think it is.
 MAX_UNPARSED_SHARE = 0.10
 
-# The session's own transcript, as opposed to a subagent's.
 MAIN_STREAM = "main"
-
-# Subagent transcripts live in this directory beside the parent session's own file.
 SUBAGENT_DIR = "subagents"
 
-# Tools that modify the working tree.
 EDIT_TOOLS = frozenset({"Edit", "Write", "NotebookEdit", "MultiEdit"})
-
-# Tools that signal an explicit planning step.
 PLAN_TOOLS = frozenset({"EnterPlanMode", "ExitPlanMode"})
 
-# Commands that verify work: test runners, builders, type checkers, linters.
 _VERIFY_RE = re.compile(
     r"""\b(
         pytest | tox | nox | unittest
@@ -147,14 +131,8 @@ class Event:
     verifies: bool = False  # the command runs tests, a build, or a checker
     is_mcp: bool = False
     mcp_server: str | None = None  # kept local; only the *count* is ever uploaded
-    # The working directory the *session* was in when this happened — the only correct
-    # base for a relative edit path. None means the log had not recorded one yet, which
-    # makes any relative path here unresolvable rather than resolvable-by-assumption.
-    cwd: str | None = None
-    # Which transcript this came from. ``MAIN_STREAM`` for the session's own file, the
-    # subagent's id for work delegated to one. Run-based metrics never straddle streams:
-    # they ran concurrently, so file order across them carries no sequencing information.
-    stream: str = MAIN_STREAM
+    cwd: str | None = None  # the session's own cwd: the only correct base for a relative path
+    stream: str = MAIN_STREAM  # MAIN_STREAM, or the subagent id the work was delegated to
 
 
 @dataclass
@@ -169,9 +147,7 @@ class Session:
     n_unparsed: int = 0
     n_unrecognised: int = 0
     n_subagents: int = 0
-    # Every distinct working directory this session was observed in, in first-seen order.
-    # The scope key: which project a session belongs to is answered from this, not guessed
-    # from the log directory's name.
+    # The scope key, in first-seen order: never guessed from the log directory's name.
     cwds: tuple[str, ...] = ()
 
     def of_kind(self, kind: EventKind) -> list[Event]:
@@ -218,8 +194,7 @@ class ParseResult:
     unrecognised_types: Counter[str] = field(default_factory=Counter)
     degraded: bool = False
     degraded_reason: str = ""
-    # The frozen snapshot these sessions were read from. Empty when the logs were read
-    # live, which is only correct in tests — see :mod:`vouch.l2.snapshot`.
+    # Empty only when the logs were read live, which is correct in tests and nowhere else.
     as_of: datetime | None = None
     snapshot_digest: str = ""
 
@@ -372,9 +347,7 @@ def parse_session_file(
             if session_id is None and (sid := record.get("sessionId")):
                 session.session_id = str(sid)
 
-            # `cwd` is carried forward: most records have one, and the ones that do not
-            # happened wherever the last one said. A `relocated` record is the session
-            # moving — the same event a rename produces mid-session.
+            # Carried forward: a record without a `cwd` happened wherever the last one said.
             moved = record.get("relocatedCwd") if kind == "relocated" else record.get("cwd")
             if isinstance(moved, str) and moved:
                 cwd = moved
@@ -463,8 +436,7 @@ def parse_log_dir(root: Path | None = None) -> ParseResult:
         result.n_files += 1
         parent_id = _parent_session_id(path)
         if parent_id is not None:
-            # A subagent transcript. Held back so the parent exists to absorb it whatever
-            # order the walk happens to reach them in.
+            # Held back so the parent exists to absorb it whatever order the walk reaches them in.
             deferred.append((parent_id, path))
             continue
         try:
@@ -490,8 +462,7 @@ def parse_log_dir(root: Path | None = None) -> ParseResult:
         if (parent := by_id.get(parent_id)) is not None:
             parent.absorb(sub)
         else:
-            # The parent's own transcript is missing. Keep the work — it happened — but
-            # under the parent's id, so it is still one session and not a phantom extra.
+            # The parent's transcript is missing: keep the work under its id, not as an extra.
             sub.n_subagents = 1
             by_id[parent_id] = sub
 

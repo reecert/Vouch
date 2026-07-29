@@ -41,8 +41,7 @@ MIN_LABELS_FOR_EVIDENCE = 15
 #: Below this many scored rows, calibration is not computed and never claimed.
 MIN_LABELS_FOR_CALIBRATION = 30
 
-#: The conclusive verdicts are ordinal, so "adjacent" is meaningful and a disagreement has a
-#: direction. `not_collected` and `contradicted` are categorical — exact match or nothing.
+#: Ordinal, so a disagreement has a direction. The other verdicts are categorical.
 BAND_ORDER: dict[Verdict, int] = {
     Verdict.INSUFFICIENT_EVIDENCE: 0,
     Verdict.LIMITED: 1,
@@ -109,6 +108,8 @@ class EvalReport(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     split: str
+    #: Printed above the metrics: the corpus decides what the figure is evidence *about*.
+    corpus_name: str = ""
     prompt_version: str = ""
     total_labelled: int = 0
     metrics: EvalMetrics = Field(default_factory=EvalMetrics)
@@ -189,6 +190,7 @@ def run_eval(
     *,
     split: str = "holdout",
     prompt_version: str = "",
+    corpus_name: str = "",
 ) -> EvalReport:
     """Score a split. ``judge_fn`` runs the pipeline for one label and returns its finding.
 
@@ -249,6 +251,7 @@ def run_eval(
 
     return EvalReport(
         split=split,
+        corpus_name=corpus_name,
         prompt_version=prompt_version,
         total_labelled=labels.total,
         metrics=metrics,

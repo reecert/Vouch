@@ -12,10 +12,18 @@ The prompts do **not** ask for `insufficient_evidence` as a favour — the respo
 makes it one of a closed set of values. What the prompts do is describe when it is the
 *right* answer, because a model that never uses it is as miscalibrated as one that always
 does.
+
+Facts reach the model through :func:`vouch.l1.interval.format_range`, the same formatter the
+labelling harness prints for a human. When the two differed — `%g` here at six significant
+figures, two there — the judge read `0.21-0.3041` where the labeller read `0.21-0.30`, on the
+same fact, in a study whose entire output is whether the two agree. Any change to how a
+number is rendered on either side has to move both, and bump :data:`PROMPT_VERSION`:
+calibration measured against an earlier version was measured against a different question.
 """
 from __future__ import annotations
 
 from vouch.l1.facts import FactStatus, RepoFacts
+from vouch.l1.interval import format_range
 from vouch.l2.payload import SessionMetrics
 from vouch.l3.join import CorroborationReport
 from vouch.l4.diffs import CommitDiff
@@ -25,10 +33,7 @@ from vouch.l4.schema import CommitJudgment
 __all__ = ["PROMPT_VERSION", "commit_system", "commit_user", "dimension_system",
            "dimension_user"]
 
-# Bumped at /2 when facts started being presented as intervals rather than point estimates,
-# and at /3 when two verdict names changed. Any calibration measured against an earlier
-# version was measured against a different question.
-PROMPT_VERSION = "l4-diff/3"
+PROMPT_VERSION = "l4-diff/4"
 
 
 def commit_system() -> str:
@@ -73,7 +78,7 @@ def _band(fact) -> str:
     if fact.interval is None:
         return f"{fact.value}{unit}"
     return (
-        f"{fact.interval.low:g}-{fact.interval.high:g}{unit} "
+        f"{format_range(fact.interval.low, fact.interval.high)}{unit} "
         f"(point estimate {fact.value}{unit}; "
         f"bounds at {fact.interval.low_level:.0%}/{fact.interval.high_level:.0%})"
     )
@@ -97,7 +102,7 @@ def _render_facts(facts: RepoFacts, keys: tuple[str, ...]) -> str:
             # Suppressed means no point estimate, not no information.
             lines.append(
                 f"  {key}: no point estimate — the evidence supports "
-                f"{fact.interval.low:g}-{fact.interval.high:g} "
+                f"{format_range(fact.interval.low, fact.interval.high)} "
                 f"from {fact.denominator} observation(s)"
             )
         else:
@@ -117,7 +122,7 @@ def _render_metrics(metrics: SessionMetrics | None, availability: EvidenceAvaila
         if rate is None:
             continue
         band = (
-            f"{rate.low:g}-{rate.high:g}"
+            format_range(rate.low, rate.high)
             if rate.low is not None and rate.high is not None
             else "unknown"
         )

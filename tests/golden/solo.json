@@ -46,7 +46,7 @@
       ],
       "interval": null,
       "key": "ownership_loop",
-      "note": "not assessable here \u2014 subject authored 12/12 human commits (100%); 1 distinct human author(s). With no other authors, fixing one's own bugs is the only option available, so the loop carries no ownership signal.",
+      "note": "subject authored 12/12 human commits (100%); 1 distinct human author(s). With no other authors, fixing one's own bugs is the only option available, so the loop carries no ownership signal.",
       "numerator": null,
       "polarity": "higher_is_better",
       "status": "not_assessable",

@@ -82,8 +82,7 @@ def test_low_denominators_are_suppressed_not_rounded(l1) -> None:
 
     assert all(f.status is FactStatus.SUPPRESSED_LOW_N for f in facts.facts)
     assert all(f.value is None for f in facts.facts)
-    # The denominator survives suppression: "3 observations, below a floor of 99" is the
-    # honest statement, and the reader needs the 3 to see why.
+    # The denominator survives: the reader needs the 3 to see why there is no estimate.
     assert facts.fact("ownership_loop").denominator == 3
     assert "below the floor of 99" in facts.fact("ownership_loop").note
 

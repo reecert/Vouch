@@ -90,8 +90,6 @@ class DegradedReason(StrEnum):
     NOT_A_SESSION_LOG = "not_a_session_log"
 
 
-# Built-in tool names -> bucket. Anything absent maps to OTHER, so a tool introduced
-# tomorrow is counted without its name ever reaching the payload.
 _BUCKETS: dict[str, ToolBucket] = {
     "Bash": ToolBucket.SHELL,
     "Edit": ToolBucket.EDIT,
@@ -117,7 +115,11 @@ _BUCKETS: dict[str, ToolBucket] = {
 
 
 def bucket_for(tool: str) -> ToolBucket:
-    """Map a tool name to its bucket. MCP tools bucket by prefix, never by name."""
+    """Map a tool name to its bucket. MCP tools bucket by prefix, never by name.
+
+    An unknown tool falls to ``OTHER``, so one introduced tomorrow is counted without its
+    name ever reaching the payload.
+    """
     if tool.startswith("mcp__"):
         return ToolBucket.MCP
     return _BUCKETS.get(tool, ToolBucket.OTHER)
@@ -159,8 +161,6 @@ class SessionMetrics(BaseModel):
     parser_version: str = ""
     log_format: str = ""
 
-    # What population every rate below was computed over. A consumer that needs
-    # repo-scoped evidence checks this rather than assuming.
     scope: MetricScope = MetricScope.MACHINE
     n_sessions_out_of_scope: int = 0  # seen on this machine, excluded from these rates
 
@@ -176,11 +176,7 @@ class SessionMetrics(BaseModel):
     window_first: date | None = None
     window_last: date | None = None
 
-    # The session snapshot these metrics were read from. `as_of` is the newest log
-    # modification time seen; the digest that actually identifies the snapshot lives
-    # in the profile's provenance, because a content hash of log bytes is not a thing
-    # this payload should carry off the machine.
-    as_of: datetime | None = None
+    as_of: datetime | None = None  # the newest log mtime; the digest stays in provenance
 
     rates: dict[MetricKey, Rate] = Field(default_factory=dict)
     tool_usage: dict[ToolBucket, int] = Field(default_factory=dict)

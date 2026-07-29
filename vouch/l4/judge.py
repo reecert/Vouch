@@ -48,8 +48,7 @@ from vouch.schemas import CommitRecord
 
 __all__ = ["JudgeError", "MAX_GROUNDING_RETRIES", "judge_profile", "apply_support_check"]
 
-#: One bounded retry, as in the v0 prototype. A model that cites a phantom commit twice is
-#: not going to get it right on the third attempt.
+#: A model that cites a phantom commit twice will not get it right on the third attempt.
 MAX_GROUNDING_RETRIES = 1
 
 
@@ -136,8 +135,7 @@ def _judge_dimension(
             )
             continue
 
-        # Retry exhausted: drop the unsourced claims rather than publish them, and record
-        # that we did. A claim that cannot be checked is worth less than no claim.
+        # Retry exhausted: an unsourced claim is worth less than no claim.
         grounded = [
             claim
             for claim in finding.claims

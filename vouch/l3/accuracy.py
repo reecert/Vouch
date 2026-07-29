@@ -30,9 +30,7 @@ __all__ = [
     "score_join",
 ]
 
-# Below this many labelled commits, precision and recall are directional, not evidence.
-# Mirrors the eval harness's existing refusal to dress up a small n as a result.
-MIN_LABELS_FOR_ACCURACY = 20
+MIN_LABELS_FOR_ACCURACY = 20  # below this, precision and recall are directional only
 
 
 class JoinLabel(BaseModel):
@@ -146,8 +144,6 @@ def score_join(report: CorroborationReport, labels: list[JoinLabel]) -> JoinMetr
     if claimed:
         metrics.precision = round(metrics.true_positive / claimed, 4)
 
-    # Denominator is every commit that genuinely had a session — so a false negative, a
-    # wrong-session match and an ambiguous verdict all count against recall equally.
     if metrics.n_with_session:
         metrics.recall = round(metrics.true_positive / metrics.n_with_session, 4)
 

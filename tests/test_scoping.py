@@ -49,9 +49,6 @@ def _rates(**kw) -> dict[MetricKey, Rate]:
     }
 
 
-# --- the contract itself ---------------------------------------------------------------
-
-
 def test_every_dimension_declares_a_scope() -> None:
     """A dimension that did not declare one would inherit whatever it was handed."""
     assert all(spec.scope is MetricScope.REPO for spec in DIMENSIONS)
@@ -129,9 +126,6 @@ def test_a_dimension_with_its_own_repo_evidence_survives_out_of_scope_telemetry(
     assert availability.l2_out_of_scope is True
     assert availability.has_any is True  # the commit judgments are repo-scoped by nature
     assert availability.forces_out_of_scope is False
-
-
-# --- deriving a scoped population --------------------------------------------------------
 
 
 @pytest.fixture

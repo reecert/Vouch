@@ -1,4 +1,11 @@
-# The calibration corpus: twelve real public repos, one target author each.
+# The COMMIT-TRAIL calibration corpus: twelve real public repos, one target author each.
+#
+# Not "the eval corpus". Every row is somebody else's public repository, and L2 reads
+# session logs that exist only on the machine the work happened on, so no row here can ever
+# carry session telemetry — see `name:`, the `calibrates:` block, and
+# notes.no_session_telemetry_in_this_corpus for what that does to each dimension. An
+# agreement number measured here is evidence about the commit-trail half of the judge and
+# about nothing else.
 #
 # Every claim below about a
 # repo's shape was MEASURED by running `vouch.l1.confounds.compute_stats` +
@@ -49,6 +56,23 @@
 
 schema_version: eval/repos/1
 measured_at_config: "6f2b5501a1b2"   # L1Config.fingerprint() at selection time
+
+# The name travels with every number measured here, because the number means nothing
+# without it. Stated as a limit rather than a label so it cannot be quoted as a compliment.
+name: "commit-trail calibration corpus (L1 only — no row in it can carry session telemetry)"
+
+# What this corpus can calibrate, per dimension. Not a summary of the note below: a
+# declaration that `tests/test_eval_corpus.py::test_the_corpus_declares_its_coverage_and_is_right`
+# checks against `vouch.l4.dimensions.DIMENSIONS`, so a dimension that gains or loses a
+# layer fails here instead of quietly making this file's claim stale.
+#   full    — every layer the dimension reads from is present in this corpus
+#   l1_half — the commit-trail half is present; the session half never is
+#   none    — the dimension reads from L2 alone, so every row is forced `not_collected`
+calibrates:
+  ownership: full
+  verification_discipline: l1_half
+  scope_control: l1_half
+  planning_discipline: none
 
 repos:
   # ---- solo: ownership_loop is suppressed as INVALIDATING ---------------------------
@@ -568,6 +592,41 @@ notes:
     over four values is still coarse — and it does not weaken
     prediction_scope_control_agreement, which remains the number to distrust. It does mean
     the corpus is no longer 50% clustered on a single value.
+
+  no_session_telemetry_in_this_corpus: >
+    A LIMIT OF THE CORPUS, RECORDED BEFORE THE FIRST LABEL IS WRITTEN, because a limit
+    discovered while reading an agreement number gets argued with instead of applied.
+    Every row is a public repository written by somebody else. L2 reads the local session
+    CLI's logs, which exist only on the machine the work was done on, so NO ROW HERE CAN
+    EVER CARRY L2 — not "has none today", cannot. L3 corroboration joins commits to
+    sessions and is empty for the same reason. Cloning more repos does not change this;
+    nothing measured in phase 1 changes this.
+    WHAT IT DOES TO EACH DIMENSION — declared in `calibrates:` at the top of this file and
+    cross-checked against `vouch.l4.dimensions.DIMENSIONS` by a test, so the claim cannot
+    go stale silently:
+    `ownership` — FULL. Three L1 facts, no metric. A label here is ground truth for the
+    whole question the judge is scored on.
+    `verification_discipline` — L1 HALF ONLY. The dimension asks "in the commit trail AND
+    while working?"; `test_or_build_after_edit` is absent on every row, so a label answers
+    the commit-trail half and the render says so on screen. Its agreement number is not
+    evidence that the corroborated, two-layer version of the dimension works — that is the
+    version docs/plan.md §5 q2 says should lead the report, and this corpus cannot see it.
+    `scope_control` — L1 HALF ONLY, for the same reason (`edit_revision` is never present).
+    Read alongside notes.prediction_scope_control_agreement, which distrusts its number on
+    a second, independent ground.
+    `planning_discipline` — NONE. It reads `plan_before_execute` and nothing else, so
+    `assess_availability` forces `not_collected` on every row for the labeller and for the
+    judge alike. Agreement will be 100% and it measures one thing: that both sides read the
+    same forced verdict off the same function. Reporting it as a dimension score would be
+    the emptiest number this repo could print.
+    HOW TO CITE A NUMBER FROM HERE: by this file's `name`, which states the limit in the
+    only place a citation is guaranteed to carry — "commit-trail calibration corpus (L1
+    only)", never "the eval corpus". `vouch.eval.format.format_report` prints it above the
+    metrics for the same reason.
+    WHAT WOULD LIFT THE LIMIT, so this is not read as permanent: a corpus row whose subject
+    ran the session CLI and consented to the logs being used — i.e. this repository's own
+    author, or a colleague. One such row does not make an L2 agreement number; it makes the
+    first evidence that the L2 half of the pipeline is measurable at all.
 
   confounds_not_covered: >
     The five original axes left four of L1's nine detectors unexercised. Adding the

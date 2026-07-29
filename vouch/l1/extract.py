@@ -208,11 +208,6 @@ def _locators(pairs: list[tuple[str, str | None]]) -> list[Locator]:
     return [Locator(sha=sha, path=path) for sha, path in seen]
 
 
-# --------------------------------------------------------------------------------------
-# The facts
-# --------------------------------------------------------------------------------------
-
-
 def _fact_ownership_loop(self_fixes: list[SelfFix], config: L1Config) -> Fact:
     """Of the times the subject returned to fix their own older code, how often with a test.
 
@@ -222,9 +217,7 @@ def _fact_ownership_loop(self_fixes: list[SelfFix], config: L1Config) -> Fact:
     """
     returns = [sf for sf in self_fixes if sf.gap_days >= config.detection.return_gap_days]
     with_test = [sf for sf in returns if sf.has_test]
-    # The fix locator names the source file that was repaired; the test locator names the
-    # test that accompanied it. Both are (sha, path) so L4 can cite either and the
-    # grounding validator can check both halves.
+    # Both the repaired file and the accompanying test, so L4 may cite either.
     evidence = _locators(
         [(sf.fix.sha, sf.path) for sf in returns]
         + [(sf.test_sha, sf.test_path) for sf in with_test if sf.test_sha]
@@ -287,8 +280,6 @@ def _fact_test_accompanies_fix(
         value=round(len(with_tests) / len(fixes), 4) if fixes else None,
         unit=Unit.FRACTION,
         polarity=Polarity.HIGHER_IS_BETTER,
-        # The acceptance case for the whole interval change: 0 of 5 must publish as a wide
-        # range from zero, not as a confident 0.0 on the dimension that leads the report.
         interval=asymmetric_interval(
             len(with_tests), len(fixes), Polarity.HIGHER_IS_BETTER
         ),
@@ -333,19 +324,13 @@ def _fact_commit_scoping(subject_commits: list[CommitRecord]) -> Fact:
         status=FactStatus.MEASURED,
         value=round(statistics.median(counts), 2) if counts else None,
         unit=Unit.FILES,
-        # Neutral: a small median is focused work or trivial work, a large one is thorough
-        # or sprawling. The fact is context for the reader, not a score.
-        polarity=Polarity.NEUTRAL,
+        polarity=Polarity.NEUTRAL,  # a small median is focused work or trivial work
         interval=median_interval([float(c) for c in counts]),
         numerator=None,
         denominator=len(counts),
         evidence=[],
     )
 
-
-# --------------------------------------------------------------------------------------
-# Suppression
-# --------------------------------------------------------------------------------------
 
 _FLOORS = {
     F_OWNERSHIP_LOOP: "fix_commits",
@@ -374,11 +359,7 @@ def _apply_suppression(
     for f in facts:
         blocker = invalidated.get(f.key)
         if blocker is not None:
-            # Drop the ratio as well as the value. For a low-n suppression the denominator
-            # *is* the honesty ("only 2 observations"); here the ratio itself is
-            # meaningless, and leaving 2/3 on the page invites the reader to do the
-            # division we just declined to do. Evidence stays: those commits were still
-            # inspected, and L4 may still want to look at them.
+            # The ratio goes too: leaving 2/3 on the page invites the division we declined.
             out.append(
                 f.model_copy(
                     update={
@@ -387,7 +368,8 @@ def _apply_suppression(
                         "interval": None,
                         "numerator": None,
                         "denominator": None,
-                        "note": f"not assessable here — {blocker.detail}",
+                        # The reason only: every renderer already prints `status` beside it.
+                        "note": blocker.detail,
                     }
                 )
             )
@@ -400,10 +382,7 @@ def _apply_suppression(
                     update={
                         "status": FactStatus.SUPPRESSED_LOW_N,
                         "value": None,
-                        # The interval survives on purpose. Suppression withholds the
-                        # *point estimate*, which is the thing thin evidence cannot
-                        # support; the range is exactly what it can, and publishing it
-                        # beats publishing nothing.
+                        # The interval survives: thin evidence supports a range, not a point.
                         "note": (
                             f"no point estimate: {f.denominator or 0} observation(s), "
                             f"below the floor of {floor}. The interval is what this "
@@ -433,11 +412,6 @@ def _low_denominator_confound(facts: list[Fact]) -> Confound | None:
         ),
         affects=thin,
     )
-
-
-# --------------------------------------------------------------------------------------
-# Entry point
-# --------------------------------------------------------------------------------------
 
 
 def extract_facts(

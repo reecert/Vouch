@@ -45,6 +45,12 @@ def _metric_lines(m: EvalMetrics) -> list[str]:
 
 def format_report(report: EvalReport) -> str:
     lines = [_RULE, f"EVAL — split: {report.split}"]
+    # Above the metrics, always: unattributed, the figure reads as a claim about the judge.
+    lines.append(
+        f"corpus: {report.corpus_name}"
+        if report.corpus_name
+        else "corpus: (unnamed — this number cannot be attributed to anything)"
+    )
     if report.prompt_version:
         lines.append(f"prompt: {report.prompt_version}")
     lines.append(f"labels in corpus: {report.total_labelled}")

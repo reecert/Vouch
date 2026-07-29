@@ -54,8 +54,7 @@ from vouch.l4.schema import DimensionKey, Verdict
 
 SUBJECT = "alice@example.com"
 
-#: Repo-scoped and unsuppressed, so the rendering of a *present* metric is what is under
-#: test rather than the scope contract that would refuse it.
+#: Repo-scoped and unsuppressed, so a *present* metric's rendering is what is under test.
 _METRICS = SessionMetrics(
     scope=MetricScope.REPO,
     n_sessions=20,
@@ -66,9 +65,7 @@ _METRICS = SessionMetrics(
 )
 
 
-#: Facts written out by hand rather than extracted, so the render digest below depends on
-#: the render alone. Extracting them would make an extractor change look like a render
-#: change, and `extractor_version` already covers that.
+#: Hand-written, not extracted: the digest below must depend on the render alone.
 _RENDER_FIXTURE = RepoFacts(
     repo="fixture",
     head_sha="a" * 40,
@@ -84,9 +81,10 @@ _RENDER_FIXTURE = RepoFacts(
             interval=Interval(low=0.0, high=0.4295, low_level=0.8, high_level=0.95),
         ),
         Fact(
+            # The note is the reason alone, exactly as `_apply_suppression` writes it.
             key="ownership_loop", status=FactStatus.NOT_ASSESSABLE,
             polarity=Polarity.HIGHER_IS_BETTER,
-            note="a solo repo has nobody else's defect to return to",
+            note="subject authored 45/45 human commits (100%); 1 distinct human author(s)",
         ),
         Fact(
             key="followup_latency", status=FactStatus.SUPPRESSED_LOW_N, unit=Unit.DAYS,
@@ -115,7 +113,7 @@ _RENDER_FIXTURE = RepoFacts(
 )
 
 #: Bump with RENDER_VERSION. See test_the_render_version_tracks_what_is_actually_on_screen.
-_RENDER_DIGEST = "6d3ec1ded6ea943f"
+_RENDER_DIGEST = "a0edd6287ca909a5"
 
 
 @pytest.fixture
@@ -130,7 +128,12 @@ def _spec(key: DimensionKey):
     return next(s for s in DIMENSIONS if s.key is key)
 
 
-# --- blindness -----------------------------------------------------------------------------
+def _extract(tmp_path: Path, variant: str) -> RepoFacts:
+    """L1's real output for one fixture repo — notes and confound details included."""
+    repo = tmp_path / variant
+    getattr(repos, variant)(repo)
+    snapshot = ingest(str(repo), cache_dir=tmp_path / "cache")
+    return extract_facts(snapshot, SUBJECT, repo)
 
 
 def test_the_harness_cannot_be_handed_a_judge_result() -> None:
@@ -154,9 +157,6 @@ def test_a_rendered_task_contains_no_verdict_language(facts) -> None:
     # The vocabulary appears once, as the menu of answers — never as an assertion.
     assert text.count("strong") == 1
     assert "the judge" not in text.lower()
-
-
-# --- the split is fixed before anyone looks ---------------------------------------------------
 
 
 def test_the_split_is_deterministic() -> None:
@@ -187,9 +187,6 @@ def test_the_holdout_share_is_roughly_as_declared() -> None:
     splits = [assign_split(r, s.key) for r in rows for s in DIMENSIONS]
     share = splits.count("holdout") / len(splits)
     assert abs(share - SPLIT_HOLDOUT_SHARE) < 0.06
-
-
-# --- what the labeller sees --------------------------------------------------------------------
 
 
 def test_a_thin_fact_is_shown_as_an_interval_not_a_zero(facts) -> None:
@@ -295,16 +292,45 @@ def test_a_fact_with_no_better_direction_says_so_rather_than_going_quiet(facts) 
 
 
 def test_confounds_are_shown_with_their_direction(tmp_path: Path) -> None:
-    repo = tmp_path / "solo"
-    repos.solo(repo)
-    snapshot = ingest(str(repo), cache_dir=tmp_path / "cache")
-    solo_facts = extract_facts(snapshot, SUBJECT, repo)
-
-    task = build_task(_spec(DimensionKey.OWNERSHIP), "solo", solo_facts)
+    task = build_task(
+        _spec(DimensionKey.OWNERSHIP), "solo", _extract(tmp_path, "solo")
+    )
     assert any("solo_repo" in c for c in task.confounds)
 
 
-# --- what is not a judgement call is not offered as one ----------------------------------
+def test_a_fact_that_cannot_be_assessed_says_so_once(tmp_path: Path) -> None:
+    """The status belongs to the line, the reason belongs to the note.
+
+    Both used to say "not assessable", so a suppressed fact rendered as "not assessable —
+    not assessable here — subject authored…" and the reason — the only part a labeller can
+    act on — arrived third, behind two identical phrases.
+    """
+    task = build_task(
+        _spec(DimensionKey.OWNERSHIP), "solo", _extract(tmp_path, "solo")
+    )
+    line = next(line for line in task.evidence if "ownership_loop" in line)
+
+    assert line.count("not assessable") == 1
+    assert "distinct human author" in line, "the reason did not survive the fix"
+
+
+def test_a_commit_count_names_the_population_it_counts(tmp_path: Path) -> None:
+    """Two denominators, adjacent, over different populations, is the missing-L2 failure.
+
+    `subject activity` counts every author including bots; the confound lines beneath it
+    count human commits only. Rendered as bare totals they read as one series — "671 of
+    1482" above "1087 of 1335" — and a labeller who subtracts them, or who reads the
+    subject's share off the wrong denominator, is drawing on a relationship nothing on
+    screen ever stated.
+    """
+    facts = _extract(tmp_path, "squash_merged")
+    task = build_task(_spec(DimensionKey.SCOPE_CONTROL), "squash", facts)
+
+    activity = next(line for line in task.evidence if "subject activity" in line)
+    squash = next(c for c in task.confounds if "squash_merge_history" in c)
+
+    assert "by every author (bots included)" in activity
+    assert "human-authored commits (bots excluded)" in squash
 
 
 def test_a_dimension_with_no_input_layer_forces_the_answer(facts) -> None:
@@ -347,6 +373,36 @@ def test_a_dimension_that_was_looked_at_does_not_offer_not_collected(facts) -> N
         assert Verdict.INSUFFICIENT_EVIDENCE in task.permitted
 
 
+def test_evidence_that_decides_nothing_is_still_the_labeller_s_call() -> None:
+    """"Present but not decisive" is a verdict on the menu, not a forced answer.
+
+    Every corpus row renders `scope_control` this way: `commit_scoping` measured, neutral,
+    and narrow — `2.0-2.0`, neither direction better — with `edit_revision` absent because
+    a public repo has no session telemetry. The evidence is there, it is not thin, and it
+    points nowhere.
+
+    `insufficient_evidence` is that answer. It is not `not_collected` (the commit trail was
+    read) and not `out_of_scope` (nothing was measured over the wrong population), and
+    forcing either through `assess_availability` would write a harness assertion into the
+    ground truth where a human judgement belongs — the harness knows what was collected, it
+    does not know what decides a question.
+    """
+    task = build_task(_spec(DimensionKey.SCOPE_CONTROL), "row", _RENDER_FIXTURE, None)
+
+    scoping = next(line for line in task.evidence if "commit_scoping" in line)
+    assert "2.0-2.0" in scoping and "neither direction is better" in scoping
+    assert any("no session telemetry" in line for line in task.session)
+
+    assert not task.is_forced
+    assert Verdict.INSUFFICIENT_EVIDENCE in task.permitted
+    assert Verdict.NOT_COLLECTED not in task.permitted
+    assert Verdict.OUT_OF_SCOPE not in task.permitted
+    # Three distinct values, so a label recording one can never be read as another.
+    assert len(
+        {Verdict.INSUFFICIENT_EVIDENCE, Verdict.NOT_COLLECTED, Verdict.OUT_OF_SCOPE}
+    ) == 3
+
+
 def test_the_harness_and_the_judge_ask_the_same_availability_question(facts) -> None:
     """One function decides it for both, so the label and the verdict cannot disagree.
 
@@ -372,9 +428,6 @@ def test_pending_skips_what_is_already_labelled() -> None:
 
     assert ("hunter", DimensionKey.OWNERSHIP) not in [(i, s.key) for i, s in pending]
     assert len(pending) == len(DIMENSIONS) - 1
-
-
-# --- writing labels ------------------------------------------------------------------------------
 
 
 def test_a_label_is_written_into_the_pool_its_split_assigned(tmp_path: Path) -> None:
@@ -415,8 +468,6 @@ def test_a_written_label_reloads_through_the_validator(tmp_path: Path) -> None:
     assert labels.total == 1
     assert labels.train[0].corpus_id == "hunter"
 
-
-# --- provenance: naming the code the judgement was made against -----------------------------
 
 _PROV = LabelProvenance(
     code_sha="0123456789abcdef",
@@ -505,8 +556,7 @@ def test_provenance_reads_this_repo(tmp_path: Path) -> None:
     assert len(prov.code_sha) == 40, "not a resolved git sha"
     assert prov.extractor_version and prov.l1_config
     assert prov.render_version == RENDER_VERSION
-    # A label does not depend on how the JUDGE is prompted, so there is still no field for
-    # that. `render_version` is the other thing entirely: what the human was shown.
+    # A label is a reading of evidence, not of a prompt, so there is still no field for one.
     assert "prompt_version" not in LabelProvenance.model_fields
 
 

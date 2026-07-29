@@ -12,7 +12,8 @@ Two further shapes carry weight:
 * **`Confidence` is a band, never a float.** A model asked for 0.0-1.0 will produce 0.82
   and mean nothing by it. Three bands are honest about the resolution actually available.
 * **`Verdict` separates four different kinds of "no".** `insufficient_evidence` (we looked,
-  there wasn't enough), `not_collected` (we didn't look — the input layer was absent),
+  and what we found does not settle it — either too little of it, or enough of it pointing
+  nowhere), `not_collected` (we didn't look — the input layer was absent),
   `out_of_scope` (we looked, and what exists describes a different population) and
   `contradicted` (we looked, and the evidence points the other way) are distinct facts about
   a candidate. Collapsing them, as a single "unknown" would, loses the one a reader most
@@ -47,9 +48,7 @@ __all__ = [
     "CONCLUSIVE_VERDICTS",
 ]
 
-#: Bumped to 2 when `not_assessed`/`not_assessable` became `not_collected`/`out_of_scope`.
-#: The constrained output schema changed, so a stored result carrying the old spellings is
-#: not readable as this one and says so rather than half-parsing.
+#: Bump when the constrained output schema moves: a stored result must not half-parse.
 L4_SCHEMA_VERSION = "l4/2"
 
 
@@ -68,18 +67,13 @@ class Verdict(StrEnum):
     STRONG = "strong"
     MODERATE = "moderate"
     LIMITED = "limited"
-    INSUFFICIENT_EVIDENCE = "insufficient_evidence"  # looked; not enough to say
+    INSUFFICIENT_EVIDENCE = "insufficient_evidence"  # looked; it does not settle the question
     NOT_COLLECTED = "not_collected"  # did not look; the input was never gathered
-    # Looked, and the evidence that exists is not valid at the scope this dimension claims
-    # — session telemetry from other projects cannot describe work in this repository.
-    # Distinct from `insufficient_evidence` because the remedy is different: more data of
-    # the same kind would not help, only data of the right kind would.
-    OUT_OF_SCOPE = "out_of_scope"
+    OUT_OF_SCOPE = "out_of_scope"  # looked; it describes a different population
     CONTRADICTED = "contradicted"  # looked; the evidence points the other way
 
 
-#: Verdicts that assert something positive about the candidate. Only these are subject to
-#: the support check, and only these can be downgraded by it.
+#: The verdicts that assert something positive, so the only ones the support check downgrades.
 CONCLUSIVE_VERDICTS = frozenset({Verdict.STRONG, Verdict.MODERATE})
 
 

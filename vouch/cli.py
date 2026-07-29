@@ -56,8 +56,7 @@ from vouch.l5.profile import build_profile
 
 app = typer.Typer(help="vouch — evidence-backed capability profiles from real commits.")
 
-# Module-level singletons: typer wants the option object as the default, and building it
-# inline would be a function call in an argument default.
+# Module-level so the shared options are not function calls in an argument default.
 _ALIAS = typer.Option(
     [], "--alias", help="Additional address this person commits under. Repeatable."
 )
@@ -172,10 +171,6 @@ def profile(
     if sessions_file:
         metrics = SessionMetrics.model_validate_json(Path(sessions_file).read_text())
         if metrics.scope is not MetricScope.REPO:
-            # Loud, and not silently downgraded: a machine-wide payload is a fine thing to
-            # hold, it just cannot describe work in this repo. The dimensions that depend
-            # on it will report `out_of_scope` rather than borrowing another project's
-            # behaviour. Pass --log-dir to derive the repo-scoped version instead.
             typer.echo(
                 f"warning: {sessions_file} was measured at {metrics.scope.value} scope; "
                 "dimensions needing repo-scoped telemetry will be out_of_scope",
@@ -185,9 +180,7 @@ def profile(
     corroboration = None
     session_digest = ""
     if log_dir or as_of:
-        # Read a frozen copy, never the live directory: this CLI is typically run from
-        # inside a session that is still appending to it, and observing its own writes
-        # makes the profile a function of when it ran.
+        # A frozen copy, never the live directory this CLI's own session is appending to.
         frozen = (
             open_snapshot(as_of, DEFAULT_CACHE_DIR)
             if as_of
@@ -203,8 +196,6 @@ def profile(
         )
         parsed = parse_snapshot(frozen)
         corroboration = join(snapshot.commits, parsed.sessions, identity)
-        # Session metrics for a profile about *this repo* are derived from the sessions
-        # that touched this repo, and nothing else.
         scoped, n_out = sessions_in_repo(parsed.sessions, identity)
         metrics = derive_metrics(
             parsed.narrowed_to(scoped),
@@ -417,9 +408,7 @@ def label_(
             row.repo,
             snapshot.head_sha,
             subject,
-            # Bound as defaults: the lambda outlives this iteration only if the cache
-            # misses, but a late-binding closure over the loop variables would silently
-            # extract the *next* row's repo on a miss.
+            # Bound as defaults: a late-binding closure would extract the next row on a miss.
             lambda s=snapshot, a=subject, p=repo_path, al=aliases: extract_facts(
                 s, a, p, aliases=al
             ),
@@ -428,34 +417,22 @@ def label_(
         if not was_cached:
             typer.echo("(computed L1 fresh; the next pass over this row is instant)", err=True)
 
-        # No session telemetry: the corpus is other people's public repositories, and no
-        # log of their working sessions exists on this machine. Passed explicitly so the
-        # task renders that absence in the session section rather than omitting it.
+        # Explicitly none: the corpus is public repos, whose sessions were never on this machine.
         task = build_task(spec, corpus_id, facts_result, metrics=None)
         typer.echo(render_task(task))
 
-        # What this task will accept, which is not always the whole vocabulary: whether a
-        # dimension can be assessed at all is settled deterministically before the labeller
-        # sees it, so those verdicts are forced where they apply rather than offered.
         permitted = [v.value for v in task.permitted]
         while True:
             answer = typer.prompt("verdict (or 'skip', 'quit')").strip()
             if answer in ("quit", "skip") or answer in permitted:
                 break
-            # Re-ask rather than move on. Where the answer is forced there is nothing to
-            # move on to — the labeller has one admissible answer and mistyped it.
             typer.echo(f"not a verdict; expected one of {', '.join(permitted)}", err=True)
         if answer == "quit":
             break
         if answer == "skip":
             continue
 
-        # Which measure the verdict actually rested on. Asked because several dimensions
-        # rest on more than one and nothing defines how to combine them: recording the
-        # answer turns that underspecification into data instead of leaving it inside the
-        # labeller's head. Not asked where the answer was forced — there was no measure.
-        # Asked before the reason so that the reason is written about a named measure, and
-        # so an address in it is caught on the prompt right after it is typed.
+        # Asked before the reason, so the reason is written about a measure already named.
         leaned_on = [NO_MEASURE]
         if not task.is_forced:
             choices = sorted(permitted_measures(spec.key))
@@ -467,9 +444,7 @@ def label_(
 
         reason = typer.prompt("reason (one falsifiable line a sceptic could check)").strip()
         try:
-            # The loader's own validator, run *before* the write. An address in a `reason`
-            # is the mistake a human actually makes here, and catching it after the write
-            # would cost a hand-edit of a half-written file in the middle of a round.
+            # The loader's own validator, before the write, not after the half-written file.
             DimensionLabel(
                 corpus_id=corpus_id,
                 dimension=spec.key,
@@ -495,8 +470,6 @@ def label_(
         except Exception as e:
             typer.echo(f"not written: {e}", err=True)
             continue
-        # Re-validate through the loader, so a reason carrying an address is caught here
-        # rather than at the next eval run.
         try:
             load_labels(target, known_ids={s.id for s in corpus.repos})
         except LabelValidationError as e:
@@ -535,8 +508,7 @@ def eval_(
         raise typer.Exit(2) from e
 
     def judge_one(label):
-        # The label names a corpus row; the row names a *selector*; the selector resolves
-        # to an address only here, against the clone, and only in memory.
+        # The selector resolves to an address only here, against the clone, and in memory.
         spec = corpus.by_id(label.corpus_id)
         repo_path = resolve_repo(spec.repo)
         snapshot = ingest(spec.repo)
@@ -559,7 +531,11 @@ def eval_(
 
     try:
         report = run_eval(
-            labels, judge_one, split=split, prompt_version=PROMPT_VERSION
+            labels,
+            judge_one,
+            split=split,
+            prompt_version=PROMPT_VERSION,
+            corpus_name=corpus.name,
         )
     except EvalError as e:
         typer.echo(f"eval refused: {e}", err=True)

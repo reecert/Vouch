@@ -249,8 +249,7 @@ def test_report_counts_and_coverage(joined) -> None:
     assert report.n_uncorroborated == 5
     assert report.coverage == pytest.approx(5 / 11)
     assert report.config_fingerprint  # the thresholds behind the verdicts are recorded
-    # Every edited path is accounted for somewhere. A ledger that does not add up is the
-    # defect this counter exists to expose.
+    # Every edited path lands in exactly one bucket; a ledger that does not add up is the bug.
     assert report.path_coverage.n_total == 14
 
 
@@ -319,7 +318,6 @@ def test_an_open_session_does_not_win_on_unrelated_later_activity(joined) -> Non
 
     assert record.verdict is CorroborationVerdict.CORROBORATED
     assert record.basis.session_ref == "S11short"
-    # S11long is not merely out-scored, it holds no path at all and never becomes a
-    # candidate — so this cannot degrade into an `ambiguous` coin flip either.
+    # S11long holds no path at all, so this cannot degrade into an `ambiguous` coin flip.
     assert record.basis.n_candidates == 1
     assert record.basis.lag_seconds == 3600

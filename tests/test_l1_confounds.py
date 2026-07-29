@@ -33,8 +33,7 @@ def test_solo_repo_invalidates_ownership(l1) -> None:
     loop = facts.fact("ownership_loop")
     assert loop.status is FactStatus.NOT_ASSESSABLE
     assert loop.value is None
-    # The ratio is withdrawn too — leaving 2/3 on the page invites the reader to do the
-    # division we just declined to do.
+    # The ratio goes too: leaving 2/3 on the page invites the division we declined.
     assert loop.numerator is None and loop.denominator is None
     # Facts the confound does not bear on are untouched.
     assert facts.fact("revert_rate").status is FactStatus.MEASURED

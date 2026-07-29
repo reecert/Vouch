@@ -63,16 +63,9 @@ L3_SCHEMA_VERSION = "l3/1"
 class L3Config:
     """Join thresholds. A report records these so a verdict can be reproduced."""
 
-    # A commit cannot precede the edits that produced it — but clocks disagree, so allow a
-    # small negative lag rather than discarding a genuine match over 90 seconds of drift.
-    clock_skew_minutes: int = 10
-    # Share of the commit's significant files the session must have *last touched* before
-    # the commit. Unchanged from the previous model, where it was a share of files merely
-    # touched — a strictly weaker predicate, so this floor is now harder to clear, not
-    # easier. Deliberately not restated downward to compensate.
-    min_path_overlap: float = 0.5
-    # Two candidates within this score of each other are ambiguous, not a winner.
-    ambiguity_margin: float = 0.10
+    clock_skew_minutes: int = 10  # two clocks disagree; a genuine match should survive it
+    min_path_overlap: float = 0.5  # of the commit's files, *last touched* by that session
+    ambiguity_margin: float = 0.10  # two candidates this close are ambiguous, not a winner
 
     def fingerprint(self) -> str:
         return (
@@ -141,8 +134,7 @@ class PathCoverage(BaseModel):
 
     @property
     def n_total(self) -> int:
-        # `n_untimed` is a subset of `n_in_repo`, not a fourth disjoint bucket: the path
-        # resolved, it just cannot be sequenced. Counting it here would double it.
+        # `n_untimed` is a subset of `n_in_repo`; adding it here would double-count.
         return (
             self.n_in_repo
             + self.n_outside
@@ -253,8 +245,7 @@ def session_edits(
                 if outcome is not PathOutcome.IN_REPO or not rel:
                     continue
                 if event.at is None:
-                    # An edit that cannot be placed in time cannot be sequenced against a
-                    # commit, and the join is entirely about sequence. Counted, not guessed.
+                    # Unsequenceable, and the join is entirely about sequence.
                     coverage.n_untimed += 1
                     continue
                 edits.setdefault(rel, []).append(event.at)

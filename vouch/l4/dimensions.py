@@ -98,12 +98,8 @@ class EvidenceAvailability:
     usable_metrics: tuple[MetricKey, ...]
     n_commit_judgments: int
     l2_present: bool
-    #: Session telemetry was supplied, but computed over a population this dimension may
-    #: not read from. Distinct from ``not l2_present``: we have data and are declining it.
-    l2_out_of_scope: bool = False
-    #: Telemetry was correctly scoped, and scoping is what removed the evidence — sessions
-    #: existed on this machine but not in this repo.
-    l2_narrowed_by_scope: bool = False
+    l2_out_of_scope: bool = False  # supplied, and declined: it covers another population
+    l2_narrowed_by_scope: bool = False  # scoped correctly, and scoping left nothing
 
     @property
     def has_any(self) -> bool:

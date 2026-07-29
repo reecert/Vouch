@@ -161,6 +161,23 @@ class TestLabelValidation:
             "one `git add .` away from a public repository."
         )
 
+    def test_the_declared_baseline_still_resolves(self) -> None:
+        """`code_sha` is only checked for being non-empty, which a dead sha satisfies.
+
+        The declaration is worth exactly what it can be checked out at, and a sha does not
+        survive its history being rewritten. One `pull --rebase` orphaned this field once
+        already, silently, because presence was the only property anything asserted.
+        """
+        declared = load_labels(REPO_ROOT / "eval" / "labels.yaml").metadata.code_sha
+        reachable = subprocess.run(
+            ["git", "-C", str(REPO_ROOT), "merge-base", "--is-ancestor", declared, "HEAD"],
+        )
+        assert reachable.returncode == 0, (
+            f"eval/labels.yaml declares a baseline of {declared[:12]}, which is not an "
+            "ancestor of HEAD. A corpus that cannot name a checkout-able baseline is not "
+            "calibrated against anything."
+        )
+
 
 class TestRefusals:
     def test_empty_holdout_is_refused(self) -> None:
@@ -277,6 +294,33 @@ class TestHonestyGuards:
         assert "OVERCLAIMED" in text
         assert "never described as 'calibrated'" in text
 
+    def test_a_report_names_the_corpus_above_the_numbers(self) -> None:
+        """What was measured decides what the measurement is about.
+
+        The calibration corpus is other people's public repositories: no row in it has
+        session telemetry, so its agreement figure is evidence about the commit-trail half
+        of the judge and about nothing else. Quoted bare, the same figure reads as a
+        statement about the judge, which is how a limit becomes a claim.
+        """
+        labels = LabelSet(holdout=[label(Verdict.STRONG)])
+        report = run_eval(
+            labels,
+            lambda row: finding(row.verdict),
+            split="holdout",
+            corpus_name="commit-trail calibration corpus (L1 only)",
+        )
+        text = format_report(report)
+
+        assert "commit-trail calibration corpus (L1 only)" in text
+        assert text.index("corpus:") < text.index("METRICS")
+
+    def test_an_unnamed_corpus_says_so_rather_than_printing_nothing(self) -> None:
+        """A missing line reads as "nothing to say here", and here that is a false claim."""
+        labels = LabelSet(holdout=[label(Verdict.STRONG)])
+        report = run_eval(labels, lambda row: finding(row.verdict), split="holdout")
+
+        assert "cannot be attributed" in format_report(report)
+
 
 class TestLabelPrivacy:
     """No third-party address may enter this repository, in any field or any comment.
@@ -382,14 +426,20 @@ class TestLabelPrivacy:
         at its SHA, and still pushed. The history was rewritten; this test is what stops it
         coming back.
 
+        It has already come back once. That first rewrite was never force-pushed, so origin
+        kept the dirty base and a later `pull --rebase` replayed the clean work back on top
+        of it — restoring the address under a passing suite, because CI checks out at the
+        default depth of 1 and this test then has one commit to scan. A rewrite that does
+        not reach origin is not a rewrite, and the full-depth checkout in ci.yml is half of
+        what makes this test mean anything.
+
         Scope is **blob contents** — every version of every file ever committed. Commit
         *metadata* is deliberately out of scope: git cannot record a commit without an
         author address, so the repo owner's own identity is in every commit object by
         construction and is not a third party's to protect.
         """
         allowed = {
-            # Reserved example domains and our own synthetic fixture identities. Anything
-            # outside this set is presumed to belong to a real person.
+            # Reserved domains and our fixtures. Anything else is presumed to be a person.
             "example.com",
             "example.dev",
             "example.org",
