@@ -1,0 +1,80 @@
+<!doctype html>
+<!--
+  Source for public/og.png — the share card every profile link unfurls to.
+
+  It carries no profile content, deliberately. An unfurled card is fetched once by Slack,
+  LinkedIn, iMessage and X, then served from their caches indefinitely: it is seen by
+  everyone in a channel rather than the one person who opens the link, it arrives stripped
+  of every denominator and limitation the document is built from, and deleting the export
+  cannot withdraw it. A verdict or an email rendered here outlives the document and any
+  revocation path it might one day have. So the card says what the product is and what it
+  refuses to do, and nothing about whom it describes.
+
+  This is also why nothing here needs a "sample" watermark: a card with no person on it
+  cannot be screenshotted into a claim about a real one, so the synthetic snapshots in
+  web/data/profiles/ and a genuine profile unfurl identically and harmlessly.
+
+  Regenerate after editing (see web/README.md); the PNG is committed because the export
+  must stay a pure static build with no image generation in it.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      /* Rendered once on macOS; the committed PNG is the artifact, not this file. */
+      html, body { margin: 0; padding: 0; }
+      body {
+        width: 1200px;
+        height: 630px;
+        background: #020617;
+        color: #f1f5f9;
+        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-sizing: border-box;
+        padding: 72px 80px;
+      }
+      .mark {
+        font-size: 30px;
+        font-weight: 600;
+        letter-spacing: -0.02em;
+        color: #f1f5f9;
+      }
+      .eyebrow {
+        margin-top: 64px;
+        font-size: 19px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.22em;
+        color: #64748b;
+      }
+      h1 {
+        margin: 26px 0 0;
+        font-size: 62px;
+        line-height: 1.14;
+        font-weight: 600;
+        letter-spacing: -0.025em;
+        max-width: 15ch;
+      }
+      footer {
+        border-top: 1px solid #1e293b;
+        padding-top: 26px;
+        font-size: 22px;
+        color: #94a3b8;
+      }
+      footer b { color: #cbd5e1; font-weight: 500; }
+    </style>
+  </head>
+  <body>
+    <div>
+      <div class="mark">vouch</div>
+      <div class="eyebrow">Engineering capability profile</div>
+      <h1>It supports a hiring decision; it does not make one.</h1>
+    </div>
+    <footer>
+      Evidence first &middot; denominators stay visible &middot; <b>no overall score</b>
+    </footer>
+  </body>
+</html>

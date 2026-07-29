@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- A filled tile rather than a bare glyph: the tab strip is light or dark and a mark
+       that carries its own background reads on both without a media query. -->
+  <rect width="32" height="32" rx="7" fill="#020617" />
+  <path d="M9 10.5 16 22l7-11.5" fill="none" stroke="#f1f5f9" stroke-width="3.4"
+        stroke-linecap="round" stroke-linejoin="round" />
+</svg>
