@@ -42,7 +42,7 @@ def _facts_json(variant: str, tmp_path: Path) -> str:
     getattr(repos, variant)(repo)
     snapshot = ingest(str(repo), cache_dir=tmp_path / "cache")
     facts = extract_facts(snapshot, "alice@example.com", repo)
-    # The repo field is an absolute tmp path; everything else is machine-independent.
+    # The repo label is the tmp dir's two last segments; everything else is machine-independent.
     payload = json.loads(facts.model_dump_json())
     payload["repo"] = f"fixture://{variant}"
     return json.dumps(payload, indent=2, sort_keys=True) + "\n"

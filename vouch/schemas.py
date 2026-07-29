@@ -45,7 +45,7 @@ class RepoSnapshot(BaseModel):
     data so it can be serialized to cache.
     """
 
-    repo: str
+    repo: str  # the two-segment label, never the address — see vouch.ingest.repo_label
     head_sha: str
     commits: list[CommitRecord] = Field(default_factory=list)
     ingested_at: datetime

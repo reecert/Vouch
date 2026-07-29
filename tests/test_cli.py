@@ -11,6 +11,7 @@ from pathlib import Path
 
 from typer.testing import CliRunner
 
+from tests.conftest import assert_no_machine_locals
 from tests.fixtures import logs, repos
 from vouch.cli import app
 
@@ -386,10 +387,13 @@ def test_profile_runs_end_to_end_to_a_share_link(tmp_path: Path, monkeypatch) ->
     written = list(web_dir.glob("*.json"))
     assert len(written) == 1
 
-    profile = json.loads(written[0].read_text())
+    raw = written[0].read_text()
+    profile = json.loads(raw)
     assert profile["subject"] == SUBJECT
     assert profile["profile_id"] == written[0].stem
     assert profile["limitations"]
     assert profile["risks_to_probe"]
     # The guarantee that survives all the way to the shared artefact.
     assert "score" not in profile
+    # This run's repo is a tmp path, so the scan is live rather than notional.
+    assert_no_machine_locals(raw, subject=SUBJECT)

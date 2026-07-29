@@ -1,11 +1,14 @@
 """Deterministic ingest tests against synthetic fixture repos. No network, no LLM."""
 from pathlib import Path
 
+import pytest
+
 from tests.fixtures.builder import ALICE, BOB, Step, build_repo
 from vouch.ingest import (
     blame_line_author,
     changed_old_lines,
     ingest,
+    repo_label,
 )
 
 
@@ -43,6 +46,79 @@ def test_ingest_is_cached(tmp_path: Path):
     assert len(hits) == 1
     snap2 = ingest(str(repo), cache_dir=cache)
     assert snap1 == snap2
+
+
+@pytest.mark.parametrize(
+    ("address", "label"),
+    [
+        ("git@github.com:acme/private-api.git", "acme/private-api"),
+        ("ssh://git@gitlab.acme-corp.internal:22/infra/deploy.git", "infra/deploy"),
+        ("https://x-token:ghp_secret@github.com/acme/private-api.git", "acme/private-api"),
+        ("https://github.com/acme/private-api/", "acme/private-api"),
+        # One path segment: the org slot is empty, and the host does not get to fill it.
+        ("https://git.bigco.internal/api", "api"),
+    ],
+)
+def test_repo_label_keeps_org_and_repo_for_a_remote(address: str, label: str):
+    """The org is public — it is in the link anyone would be sent — and it makes `api` legible."""
+    assert repo_label(address) == label
+
+
+@pytest.mark.parametrize(
+    ("path", "label"),
+    [
+        ("/Users/alice/clients/bigco/api", "api"),
+        ("/Users/alice/Projects/acme-api", "acme-api"),
+        ("/home/runner/work/vouch/vouch", "vouch"),
+        ("../checkouts/acme-api", "acme-api"),
+        ("acme-api", "acme-api"),
+    ],
+)
+def test_repo_label_keeps_only_the_leaf_for_a_local_path(path: str, label: str):
+    """A parent directory is where someone filed a clone, not who owns it: `clients/bigco`."""
+    assert repo_label(path) == label
+
+
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/Users/alice/clients/bigco/api",
+        "/home/runner/work/vouch/vouch",
+        "/var/folders/qn/myx3dwjs/T/tmpad9a3c6d/repo",
+        "~/clients/bigco/api",
+        "../checkouts/acme-api",
+    ],
+)
+def test_repo_label_never_emits_a_parent_directory(path: str):
+    """The whole point of the branch: no local path may contribute more than one segment.
+
+    `bigco/api` passes `assert_no_machine_locals` — it is not a home directory, not a
+    hostname, not address-shaped — so nothing downstream would catch it.
+    """
+    assert "/" not in repo_label(path)
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "/Users/alice/Projects/acme-api",
+        "git@gitlab.acme-corp.internal:acme/private-api.git",
+        "https://x-token:ghp_secret@github.com/acme/private-api.git",
+    ],
+)
+def test_repo_label_drops_home_host_and_credentials(address: str):
+    """The negative case: what a plain two-segment split of the raw string would keep."""
+    label = repo_label(address)
+    for leaked in ("Users", "alice", "gitlab.acme-corp.internal", "ghp_secret", "@"):
+        assert leaked not in label
+
+
+def test_snapshot_stores_the_label_not_the_address(tmp_path: Path):
+    repo = tmp_path / "workspace" / "acme-api"
+    build_repo(repo, [Step(ALICE, "2024-01-01T10:00:00", "init", {"a.py": "1\n"})])
+    snap = ingest(str(repo), cache_dir=tmp_path / "cache")
+    assert snap.repo == "acme-api"
+    assert str(tmp_path) not in snap.model_dump_json()
 
 
 def test_revert_body_is_parsed(tmp_path: Path):

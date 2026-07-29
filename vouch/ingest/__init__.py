@@ -7,6 +7,21 @@ line, but is still pure git). Cached by ``repo + head_sha``.
 All git access is via subprocess with ``check=True`` — a git failure raises, it is never
 silently swallowed (except blame, which returns None for the legitimate "no prior line"
 case).
+
+**The address stops here.** ``repo_url`` is whatever the operator typed, and every form of
+it discloses something that does not belong in a document a stranger can open: a local
+clone names a home directory and the employer's repo layout, an SSH remote names a host and
+usually a private org, an https URL can carry a token. The snapshot therefore stores
+``repo_label(repo_url)``, never the address. The real address stays in-process: L1 and L3
+take a ``repo_path`` argument for the git work, so nothing downstream needs the snapshot to
+carry it, and no field they serialize can leak it.
+
+**How much of it survives depends on where it came from**, because the second-to-last
+segment means different things in the two cases. On a remote it is the org — public,
+already in the link anyone would be given, and the thing that makes ``api`` legible. On a
+local path it is just the directory someone happened to clone into, and
+``~/clients/bigco/api`` names a client under NDA. Two segments for a remote, the leaf alone
+for a path.
 """
 from __future__ import annotations
 
@@ -14,7 +29,8 @@ import hashlib
 import re
 import subprocess
 from datetime import datetime
-from pathlib import Path
+from pathlib import Path, PurePosixPath
+from urllib.parse import urlsplit
 
 from vouch.schemas import CommitRecord, RepoSnapshot
 
@@ -26,7 +42,28 @@ _REVERT_RE = re.compile(r"This reverts commit ([0-9a-f]{7,40})")
 
 DEFAULT_CACHE_DIR = Path(".vouch_cache")
 
-SNAPSHOT_VERSION = 3
+SNAPSHOT_VERSION = 5  # v5 shortens a local label to its leaf; a v4 entry keeps the parent
+
+# `git@host:org/repo` — an address, not a path, so a path split would keep the host.
+_SCP_LIKE = re.compile(r"^[^/@]+@[^/:]+:")
+
+
+def repo_label(repo_url: str) -> str:
+    """``org/repo`` for a remote, ``repo`` for a local path. See the module docstring.
+
+    The host is dropped along with the scheme and any credentials, so a private forge's
+    hostname cannot arrive as the org segment of a one-segment URL.
+    """
+    raw = repo_url.strip().rstrip("/")
+    if "://" in raw:
+        raw, keep = urlsplit(raw).path, 2
+    elif match := _SCP_LIKE.match(raw):
+        raw, keep = raw[match.end() :], 2
+    else:
+        keep = 1
+
+    parts = [p for p in PurePosixPath(raw.removesuffix(".git")).parts if p != "/"]
+    return "/".join(parts[-keep:])
 
 
 def _git(repo_path: Path, *args: str) -> str:
@@ -145,7 +182,7 @@ def ingest(repo_url: str, cache_dir: Path | None = None) -> RepoSnapshot:
         return RepoSnapshot.model_validate_json(snap_path.read_text())
 
     snapshot = RepoSnapshot(
-        repo=repo_url,
+        repo=repo_label(repo_url),
         head_sha=head_sha,
         commits=_parse_commits(repo_path),
         ingested_at=datetime.now(),

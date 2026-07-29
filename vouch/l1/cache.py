@@ -43,7 +43,7 @@ __all__ = [
     "cached_extract",
 ]
 
-EXTRACTOR_VERSION = "l1-extract/3"
+EXTRACTOR_VERSION = "l1-extract/5"
 
 _KEY_LEN = 24
 
