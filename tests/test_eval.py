@@ -6,7 +6,6 @@ because overclaiming and underclaiming are not the same failure.
 """
 from __future__ import annotations
 
-import re
 import subprocess
 from pathlib import Path
 
@@ -24,6 +23,7 @@ from vouch.eval import (
 from vouch.eval.harness import MIN_LABELS_FOR_CALIBRATION, MIN_LABELS_FOR_EVIDENCE
 from vouch.eval.labels import DimensionLabel, LabelSet
 from vouch.l4.schema import Confidence, DimensionFinding, DimensionKey, Verdict
+from vouch.privacy import contains_address, find_addresses
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 
@@ -410,12 +410,10 @@ class TestLabelPrivacy:
 
     def test_the_shipped_label_file_is_clean(self) -> None:
         """The real one, checked in CI rather than trusted."""
-        text = (REPO_ROOT / "eval" / "labels.yaml").read_text()
-        assert not re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+        assert not contains_address((REPO_ROOT / "eval" / "labels.yaml").read_text())
 
     def test_the_corpus_file_is_clean_too(self) -> None:
-        text = (REPO_ROOT / "eval" / "repos.yaml").read_text()
-        assert not re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", text)
+        assert not contains_address((REPO_ROOT / "eval" / "repos.yaml").read_text())
 
     def test_no_third_party_address_survives_in_any_committed_file(self) -> None:
         """The file being clean going forward is not sufficient — history is forever.
@@ -440,6 +438,9 @@ class TestLabelPrivacy:
         """
         allowed = {
             # Reserved domains and our fixtures. Anything else is presumed to be a person.
+            # A host we clone from is deliberately *not* here: `git@github.com:acme/api` is
+            # URL authority, discounted structurally by `find_addresses`, and allowlisting
+            # the host to quiet it would wave through every real mailbox that host serves.
             "example.com",
             "example.dev",
             "example.org",
@@ -450,6 +451,8 @@ class TestLabelPrivacy:
             "b.com",
             "corp.com",
             "whitesourcesoftware.com",
+            "vouch.dev",  # ours: the demo session identity in web/app/api/auth/demo
+            "domain.com",  # a form placeholder, since replaced; it survives only in history
         }
         objects = subprocess.run(
             ["git", "-C", str(REPO_ROOT), "rev-list", "--objects", "--all"],
@@ -481,11 +484,16 @@ class TestLabelPrivacy:
             errors="replace",
         ).stdout
 
-        found = {
-            m.group(0).split("@")[1].lower()
-            for m in re.finditer(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", cat)
-        }
-        leaked = sorted(d for d in found if d not in allowed)
+        # RFC 2606 reserves the `.example` TLD outright, so no person can be reached there
+        # and every `*.example` a fixture invents is allowed without enumerating it.
+        found = {a.split("@")[1].lower() for a in find_addresses(cat)}
+        leaked = sorted(
+            d
+            for d in found
+            if d not in allowed
+            and d.split(".")[-1] != "example"
+            and not d.endswith((".example.com", ".example.net", ".example.org"))
+        )
         assert leaked == [], (
             f"real-looking email domain(s) in committed file content: {leaked}. A "
             "third-party address in this repository's history is exactly what the "

@@ -26,13 +26,11 @@ from vouch.eval.corpus import (
     resolve_author,
 )
 from vouch.l4.dimensions import DIMENSIONS
+from vouch.privacy import contains_address, find_addresses
 
 DEPENDABOT = ("dependabot[bot]", "49699333+dependabot[bot]@users.noreply.github.com")
 REPO_ROOT = Path(__file__).resolve().parents[1]
 CORPUS_PATH = REPO_ROOT / "eval" / "repos.yaml"
-
-# Broad on purpose: this catches a slip, it does not parse RFC 5322.
-_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}")
 
 
 @pytest.fixture
@@ -102,7 +100,7 @@ def test_error_text_never_prints_an_address(repo: Path) -> None:
     for spec in (_spec(1, BOB[1]), _spec(1, "nobody@example.com")):
         with pytest.raises(CorpusError) as exc:
             resolve_author(spec, repo)
-        assert not _EMAIL_RE.search(str(exc.value))
+        assert not contains_address(str(exc.value))
 
 
 def test_a_rank_past_the_end_is_fatal(repo: Path) -> None:
@@ -180,7 +178,7 @@ def test_a_corpus_that_does_not_name_itself_is_refused(tmp_path: Path) -> None:
 
 def test_the_committed_corpus_contains_no_address() -> None:
     """No third-party address in this repository's history. The reason this module exists."""
-    found = _EMAIL_RE.findall(CORPUS_PATH.read_text())
+    found = find_addresses(CORPUS_PATH.read_text())
     assert found == [], f"address-shaped tokens in {CORPUS_PATH.name}: {found}"
 
 

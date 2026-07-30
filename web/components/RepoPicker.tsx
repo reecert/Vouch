@@ -5,28 +5,26 @@ import { useRouter } from "next/navigation";
 
 type Repo = { full_name: string; description: string; pushed_at: string; fork: boolean };
 
+// Suggestions for the custom-repo field only. Never shown as "your repositories".
 const PRESETS = [
-  { full_name: "reecert/vouch", label: "reecert/vouch", desc: "Vouch Core Engine" },
-  { full_name: "facebook/react", label: "facebook/react", desc: "React UI Library" },
-  { full_name: "vercel/next.js", label: "vercel/next.js", desc: "Next.js Web Framework" },
-  { full_name: "tailwindlabs/tailwindcss", label: "tailwindlabs/tailwindcss", desc: "Tailwind CSS Engine" },
-  { full_name: "expressjs/express", label: "expressjs/express", desc: "Express Node.js Web Server" },
+  "reecert/vouch",
+  "facebook/react",
+  "vercel/next.js",
+  "tailwindlabs/tailwindcss",
+  "expressjs/express",
 ];
 
+/**
+ * A pasted GitHub link, reduced to the `owner/repo` the API accepts.
+ *
+ * Convenience, not validation: `/api/jobs` is the only thing that decides whether a name is
+ * safe to hand `git clone`, and its pattern is pinned against `vouch/serve/db.py` by a
+ * test. A second copy of that regex here would be a fourth transcription with no test
+ * behind it, so the server's refusal is what the user sees.
+ */
 function parseRepoInput(input: string): string {
-  let cleaned = input.trim();
-  // Strip trailing .git
-  if (cleaned.endsWith(".git")) {
-    cleaned = cleaned.slice(0, -4);
-  }
-  // Strip github.com URL prefix
-  if (cleaned.includes("github.com/")) {
-    const parts = cleaned.split("github.com/");
-    cleaned = parts[parts.length - 1] ?? "";
-  }
-  // Remove leading slashes or trailing slashes
-  cleaned = cleaned.replace(/^\/+|\/+$/g, "");
-  return cleaned;
+  const withoutHost = input.trim().replace(/\.git$/, "").split("github.com/").pop() ?? "";
+  return withoutHost.replace(/^\/+|\/+$/g, "");
 }
 
 export default function RepoPicker({ defaultEmail }: { defaultEmail: string }) {
@@ -49,17 +47,11 @@ export default function RepoPicker({ defaultEmail }: { defaultEmail: string }) {
           setSelected(d.repos[0].full_name);
         }
       })
+      // A plausible list is worse than an empty one: it is indistinguishable from the real
+      // account's, and the user would queue a run against a repo they never picked.
       .catch(() => {
-        // Fallback gracefully so component never breaks
-        setRepos(
-          PRESETS.map((p) => ({
-            full_name: p.full_name,
-            description: p.desc,
-            pushed_at: new Date().toISOString(),
-            fork: false,
-          }))
-        );
-        setSelected(PRESETS[0]!.full_name);
+        setRepos([]);
+        setError("Your repositories could not be loaded. Enter one by name instead.");
       });
   }, []);
 
@@ -69,10 +61,6 @@ export default function RepoPicker({ defaultEmail }: { defaultEmail: string }) {
 
     if (!repoToSubmit) {
       setError("Please select or enter a valid repository (owner/repository).");
-      return;
-    }
-    if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,99}\/[A-Za-z0-9][A-Za-z0-9._-]{0,99}$/.test(repoToSubmit)) {
-      setError("Repository must be in format 'owner/repo' (e.g. facebook/react).");
       return;
     }
     if (!email || !email.includes("@")) {
@@ -111,7 +99,6 @@ export default function RepoPicker({ defaultEmail }: { defaultEmail: string }) {
       onSubmit={submit}
       className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm tactile-card transition-all"
     >
-      {/* Mode Selection Tabs */}
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-4">
         <div>
           <h2 className="text-base font-bold text-slate-900">Step 1: Choose a Repository</h2>
@@ -261,12 +248,12 @@ export default function RepoPicker({ defaultEmail }: { defaultEmail: string }) {
             <div className="mt-2 flex flex-wrap gap-2">
               {PRESETS.map((preset) => (
                 <button
-                  key={preset.full_name}
+                  key={preset}
                   type="button"
-                  onClick={() => setCustomInput(preset.full_name)}
+                  onClick={() => setCustomInput(preset)}
                   className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-slate-50 px-2.5 py-1 text-xs font-medium text-slate-700 hover:bg-slate-100 hover:text-slate-900 transition-colors"
                 >
-                  <span className="font-mono">{preset.label}</span>
+                  <span className="font-mono">{preset}</span>
                 </button>
               ))}
             </div>
@@ -274,7 +261,6 @@ export default function RepoPicker({ defaultEmail }: { defaultEmail: string }) {
         </div>
       )}
 
-      {/* Step 2: Email matching */}
       <div className="mt-8 pt-6 border-t border-slate-100">
         <label className="block text-base font-bold text-slate-900" htmlFor="email">
           Step 2: Git Author Email
@@ -289,7 +275,7 @@ export default function RepoPicker({ defaultEmail }: { defaultEmail: string }) {
             required
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            placeholder="author@domain.com"
+            placeholder="you@example.com"
             className="w-full rounded-xl border border-slate-200 bg-slate-50/70 px-3.5 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 focus:border-slate-900 focus:bg-white focus:outline-none transition-colors"
           />
         </div>

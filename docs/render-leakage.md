@@ -372,3 +372,33 @@ plus this machine's own home directory and hostname.
 **Unchanged: everything in §§ 1–3.** The presentation-carried leak — the colour-graded
 verdict ramp, position 1 as headline, one green pill above the fold at 390px — is untouched
 by this work. That was the brief's actual question and it remains open.
+
+---
+
+## Addendum — 2026-07-30: the render moved under the measurements
+
+*The viewer was rewritten (`fb7e670`) into numbered sections with copyable locator chips and
+a stat grid that carries its denominators in the value. Nothing below is a re-measurement —
+re-running the audit needs the geometry taken again.*
+
+**Stale, and how much.** Every `y` in § 2 and every line-numbered reference into `web/`
+(`Profile.tsx:NNN` in §§ 4–5, `web/README.md:29` in § 1) predates the rewrite and should be
+read as a description of the old layout, not of today's. The claims at those locations still
+hold; only the coordinates moved. The method itself also changed: there is no `web/out/` any more (profiles are
+written by a worker after the build, so the export was dropped), so a re-measurement serves
+`npm run build && npm start` instead of a static directory. The product pages moved to
+`web/app/(site)/`; `/p/<id>` deliberately stayed outside that group and carries no nav.
+
+**The finding is not stale.** `VERDICT_STYLES` still ramps emerald → sky → amber → rose
+across `strong` → `moderate` → `limited` → `contradicted`, and the declining verdicts are
+still the neutral half. `order_findings` still puts the best-supported conclusion first. So
+§ 3's items 1–3 — the traffic-light ramp, position 1 read as a headline, one pill above the
+fold at 390px — survive the restyle, which the commit that made it says in as many words.
+
+**The ids moved again, as designed.** The snapshots this audit measured are gone twice over:
+`c873…`/`5c7e…` were retired by the 07-29 regeneration and the files are now
+`e5289e0775c2c373` (with-telemetry) and `29ea47da5e6c6137` (git-only solo). A new id per
+regeneration is the frozen-snapshot contract working, not drifting.
+
+**Still true and still unexercised:** neither shipped snapshot contains a `low_denominator`
+confound (§ 5), so the low-n presentation path has no rendered example in the repo.

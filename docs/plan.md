@@ -1,6 +1,7 @@
 # Rebuild plan
 
-Status: **live document.** Phases 1a–1c and 1e done; 1d built but uncalibrated.
+Status: **live document.** Phases 1a–1c, 1e and 1f done; 1d built but uncalibrated, which
+is what 1f ships behind — a hosted run changes who can start one, not what a verdict is worth.
 See Part 4 for the phase table and Part 5 for what is still open.
 
 Companion doc: [`baseline-competitor.md`](./baseline-competitor.md) (competitor quality baseline).
@@ -378,7 +379,7 @@ later phase's output existing.
 | **1a** | **L1 rebuild.** New schema, confound detection, noise filtering, identity/mailmap resolution, blame perf fix, min-n floors, byte-reproducible output. | ✅ **Done.** 83 new tests; golden files over eight fixture repos (healthy, solo, squash-merged, bot-heavy, lockfile-noisy, rebased, aliased, short-window), each deforming one axis. Goldens pin real SHAs. No LLM in the loop. |
 | **1b** | **L2 CLI.** Versioned JSONL parser, derived metrics, upload-preview + confirmation, fail-soft to git-only. | ✅ **Done.** 34 tests. Payload-closure test walks the *schema* (not a sample) and fails on any free-text field; parser degrades cleanly on missing, mutated and non-session logs. Validated against 17,236 real records. |
 | **1c** | **L3 join.** Local join, match scoring, three-valued corroboration verdict, labelled join set + precision/recall harness. | ✅ **Done.** 21 tests. Correct on all 10 labelled cases (ground truth known by construction); harness nonetheless reports `insufficient_n` at n=10. Many-to-many, no-match, wrong-project, clock-skew and both sides of the overlap floor covered. |
-| **1d** | **L4 judge.** Diff-level prompts, strict output schema with the verdict enum, SHA+path grounding validator, support check, judge cache, eval labels populated. | ⚠️ **Built, not calibrated.** 33 tests; harness ported to dimension verdicts and the v0 pipeline deleted. `insufficient_evidence` observed firing on a genuinely thin history; grounding, support check and the over-eager adversary all pass. **The holdout is still empty** — §5 q8. Treat L4's calibration as unmeasured. |
+| **1d** | **L4 judge.** Diff-level prompts, strict output schema with the verdict enum, SHA+path grounding validator, support check, judge cache, eval labels populated. | ⚠️ **Built, not calibrated.** 33 tests; harness ported to dimension verdicts and the v0 pipeline deleted. `insufficient_evidence` observed firing on a genuinely thin history; grounding, support check and the over-eager adversary all pass. **The holdout is still empty** — §5 q9. Treat L4's calibration as unmeasured. |
 | **1e** | **L5 web app.** Next.js report, frozen share snapshot, Limitations + Risks-to-probe sections. | ✅ **Done.** 19 tests. A repo goes end-to-end to a frozen `/p/<id>` snapshot; `next build` statically exports it and the HTML carries every required section. Limitations are derived from confounds/sampling/absent layers rather than volunteered by the model. |
 
 | **1f** | **Hosted connect.** GitHub sign-in, repo picker, job queue, worker, dashboard with revoke, plus the product pages the flow needs. | ✅ **Built, unlabelled like the rest of L4.** 24 tests. A queued job goes to a resolving `/p/<id>` and a revoked one to a 404; cross-user reads and writes 404; a hostile repo name never becomes a `git clone` argument. The judge behind it is still uncalibrated — 1f changes who can start a run, not what a verdict is worth. |
@@ -394,9 +395,10 @@ own document and cannot touch anyone else's. The rest of the list is untouched, 
 stays exactly there: sign-in requests `read:user`, which cannot read a private repository or
 write anything, so private-repo OAuth remains out by construction rather than by restraint.
 
-**Housekeeping:** the repo currently has **zero commits** (branch `master`, everything untracked),
-while CI triggers on `main`. First commit of phase 1a should resolve the branch name and land the
-existing prototype as its own commit so the rebuild diff is readable.
+**Housekeeping:** ✅ resolved in 1a. The branch is `main` (CI's trigger), the prototype landed as
+its own commit so the rebuild diff reads, and the history was later rewritten to remove a
+third-party address — which is why `ci.yml` checks out at `fetch-depth: 0`, so the privacy test
+scans every blob rather than one commit's worth.
 
 ---
 
@@ -487,7 +489,7 @@ Lower stakes, flagged now so they do not surprise later:
    - **Noise share is measured over human commits only**, so a dependency bot's lockfile churn is
      reported once (as `bot_dominated`) rather than twice.
 
-7. **One brief metric could not be built as named (1b) — flagged rather than faked.** The brief
+8. **One brief metric could not be built as named (1b) — flagged rather than faked.** The brief
     asks for *revision-before-acceptance*. Measuring it properly needs accept/reject telemetry,
     and the logs carry only `toolDenialKind` — **2 occurrences across 17,187 records**. That is
     not a denominator. Rather than dress a different measurement in the requested name, L2 ships
@@ -501,7 +503,7 @@ Lower stakes, flagged now so they do not surprise later:
     logs are not a calibration set, and it is a reminder that these rates will read low for most
     people until there is a population to compare against.
 
-8. **L4 is built but uncalibrated. The harness is now ready; the labels are not.** Half of this
+9. **L4 is built but uncalibrated. The harness is now ready; the labels are not.** Half of this
     is closed and half is not, so stating both:
 
     - ✅ **The harness is ported.** `vouch/eval/` now scores per-dimension enum verdicts, and
@@ -548,7 +550,7 @@ Lower stakes, flagged now so they do not surprise later:
     So the remaining gap is narrower than it was, and unchanged in kind: **rows in the
     file.** Nothing here licenses a claim about the judge's accuracy.
 
-9. **L3 accuracy is real but narrow (1c).** The join is correct on all ten labelled cases and
+10. **L3 accuracy is real but narrow (1c).** The join is correct on all ten labelled cases and
     the harness still refuses to call that evidence. What the number honestly supports: *the
     scorer behaves correctly on histories we constructed*. What it does not support: that it
     generalises to real repos, where commit timestamps move under rebase, several people edit the
@@ -558,7 +560,7 @@ Lower stakes, flagged now so they do not surprise later:
     task, not a code change. Until then the profile should present corroboration coverage as a
     count, never as an accuracy claim.
 
-10. **L2 log parsing is verifiable, not synthesized (1b).** This machine has
+11. **L2 log parsing is verifiable, not synthesized (1b).** This machine has
    54 session JSONL files across 3 projects, carrying `mode`, `permission-mode`, `user`,
    `assistant`, `attachment`, `system`, `file-history-snapshot`, `file-history-delta`,
    `last-prompt` and `queue-operation` records. `mode`/`permission-mode` are what
@@ -566,4 +568,4 @@ Lower stakes, flagged now so they do not surprise later:
    invented shape — which does **not** soften risk 6 above: one local sample is not a format
    guarantee, and the versioned-parser/fail-soft design stands.
 
-11. ~~**Naming.**~~ The repository was renamed `Aiapp` -> `vouch`.
+12. ~~**Naming.**~~ The repository was renamed `Aiapp` -> `vouch`.

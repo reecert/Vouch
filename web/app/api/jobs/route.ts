@@ -48,7 +48,11 @@ export async function POST(req: NextRequest) {
   const email = (body.author_email ?? "").trim();
 
   if (!FULL_NAME.test(fullName)) {
-    return NextResponse.json({ error: "Pick a repository from the list." }, { status: 400 });
+    // The only refusal the picker shows: it no longer keeps its own copy of this pattern.
+    return NextResponse.json(
+      { error: "A repository is named `owner/repo` — not a path, a URL or an ssh address." },
+      { status: 400 },
+    );
   }
   if (!EMAIL.test(email)) {
     return NextResponse.json({ error: "That does not look like an email address." }, { status: 400 });

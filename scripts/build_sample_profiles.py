@@ -81,4 +81,4 @@ def build_git_only_solo(profile_dir: Path) -> Path:
 if __name__ == "__main__":
     written = build_git_only_solo(PROFILE_DIR)
     print(f"wrote {written.relative_to(ROOT)}")
-    print("re-pin PINNED_SNAPSHOTS in tests/test_web_share.py, then rebuild web/out")
+    print("now re-pin PINNED_SNAPSHOTS in tests/test_web_share.py")

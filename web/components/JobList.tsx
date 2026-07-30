@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 
+import { useCopied } from "@/lib/useCopied";
+
 type Job = {
   id: string;
   full_name: string;
@@ -33,7 +35,7 @@ const STATUS_STYLE: Record<Job["status"], string> = {
 export default function JobList() {
   const [jobs, setJobs] = useState<Job[] | null>(null);
   const [busy, setBusy] = useState("");
-  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [copiedId, copy] = useCopied<string>();
 
   const load = useCallback(async () => {
     const res = await fetch("/api/jobs", { cache: "no-store" });
@@ -60,12 +62,8 @@ export default function JobList() {
     void load();
   }
 
-  const copyLink = (profileId: string) => {
-    const fullUrl = `${window.location.origin}/p/${profileId}`;
-    navigator.clipboard.writeText(fullUrl);
-    setCopiedId(profileId);
-    setTimeout(() => setCopiedId(null), 2000);
-  };
+  const copyLink = (profileId: string) =>
+    copy(`${window.location.origin}/p/${profileId}`, profileId);
 
   if (jobs === null) {
     return (

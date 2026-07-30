@@ -22,13 +22,13 @@ const API = "https://api.github.com";
 export type Viewer = { id: number; login: string; name: string; email: string; avatar: string };
 export type Repo = { full_name: string; description: string; pushed_at: string; fork: boolean };
 
-export function clientId(): string {
+function clientId(): string {
   const id = process.env.GITHUB_CLIENT_ID;
   if (!id) throw new Error("GITHUB_CLIENT_ID is not set");
   return id;
 }
 
-export function redirectUri(): string {
+function redirectUri(): string {
   return `${SITE_URL}/api/auth/callback`;
 }
 
@@ -110,22 +110,15 @@ export async function listRepos(token: string): Promise<Repo[]> {
       { full_name: "expressjs/express", description: "Fast, unopinionated, minimalist web framework for node.", pushed_at: new Date().toISOString(), fork: false },
     ];
   }
-  try {
-    const repos = await api<
-      { full_name: string; description: string | null; pushed_at: string; fork: boolean }[]
-    >(token, "/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator");
-    return repos.map((r) => ({
-      full_name: r.full_name,
-      description: r.description ?? "",
-      pushed_at: r.pushed_at,
-      fork: r.fork,
-    }));
-  } catch {
-    return [
-      { full_name: "reecert/vouch", description: "Grounded engineering capability profiles.", pushed_at: new Date().toISOString(), fork: false },
-      { full_name: "facebook/react", description: "The library for web and native user interfaces.", pushed_at: new Date().toISOString(), fork: false },
-      { full_name: "vercel/next.js", description: "The React Framework", pushed_at: new Date().toISOString(), fork: false },
-      { full_name: "tailwindlabs/tailwindcss", description: "A utility-first CSS framework for rapid UI development.", pushed_at: new Date().toISOString(), fork: false },
-    ];
-  }
+  // Deliberately unguarded: `/api/repos` answers 502. A failed call must not be answered
+  // with a plausible list, which is indistinguishable from this account's real one.
+  const repos = await api<
+    { full_name: string; description: string | null; pushed_at: string; fork: boolean }[]
+  >(token, "/user/repos?per_page=100&sort=pushed&affiliation=owner,collaborator");
+  return repos.map((r) => ({
+    full_name: r.full_name,
+    description: r.description ?? "",
+    pushed_at: r.pushed_at,
+    fork: r.fork,
+  }));
 }

@@ -28,7 +28,6 @@ free text a human writes by hand and is exactly where one would slip in.
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
 
 import yaml
@@ -36,6 +35,7 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator, model_valida
 
 from vouch.l4.dimensions import DIMENSIONS
 from vouch.l4.schema import DimensionKey, Verdict
+from vouch.privacy import contains_address, find_addresses
 
 __all__ = [
     "LabelValidationError",
@@ -59,9 +59,6 @@ def permitted_measures(dimension: DimensionKey) -> set[str]:
     """
     spec = next(s for s in DIMENSIONS if s.key is dimension)
     return {*spec.l1_facts, *(m.value for m in spec.l2_metrics), NO_MEASURE}
-
-#: Broad on purpose: a false positive costs one rephrased `reason`, a false negative is a leak.
-_EMAIL_RE = re.compile(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}")
 
 
 class LabelValidationError(Exception):
@@ -106,7 +103,7 @@ class DimensionLabel(BaseModel):
             raise ValueError(
                 "reason is required and must be a non-blank, falsifiable one-liner"
             )
-        if _EMAIL_RE.search(v):
+        if contains_address(v):
             raise ValueError(
                 "reason contains something shaped like an email address. Labels are keyed "
                 "on corpus_id and no address belongs in this file — refer to the subject "
@@ -117,7 +114,7 @@ class DimensionLabel(BaseModel):
     @field_validator("corpus_id")
     @classmethod
     def _id_is_an_id(cls, v: str) -> str:
-        if _EMAIL_RE.search(v):
+        if contains_address(v):
             raise ValueError(
                 f"corpus_id {v!r} is an email address. It must be a row id from "
                 "eval/repos.yaml, which resolves to a person only against a clone."
@@ -225,7 +222,7 @@ def load_labels(
     text = path.read_text()
 
     # Raw bytes, before parsing: a YAML comment is a leak the schema would never see.
-    if found := sorted(set(_EMAIL_RE.findall(text))):
+    if found := sorted(set(find_addresses(text))):
         raise LabelValidationError(
             f"{path}: contains {len(found)} email-shaped string(s) "
             f"(first: {found[0].split('@')[0][:3]}...@...). Labels are keyed on "

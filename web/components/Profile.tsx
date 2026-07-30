@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useCopied } from "@/lib/useCopied";
 import type {
   Claim as ClaimType,
   Confound,
@@ -74,13 +74,7 @@ function Stat({
 }
 
 function Claim({ claim }: { claim: ClaimType }) {
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-
-  const copyLocator = (locText: string, index: number) => {
-    navigator.clipboard.writeText(locText);
-    setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 1800);
-  };
+  const [copiedIndex, copy] = useCopied<number>();
 
   return (
     <li className="text-sm leading-relaxed text-zinc-800 bg-zinc-50/70 p-3.5 rounded-xl border border-zinc-200/60">
@@ -91,7 +85,7 @@ function Claim({ claim }: { claim: ClaimType }) {
           return (
             <button
               key={`${loc.sha}-${loc.path ?? ""}-${i}`}
-              onClick={() => copyLocator(text, i)}
+              onClick={() => copy(text, i)}
               title="Click to copy SHA reference"
               className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1 font-mono text-xs font-medium text-zinc-800 hover:border-zinc-300 hover:bg-zinc-100 transition-colors shadow-2xs cursor-pointer"
             >
@@ -175,13 +169,7 @@ function Finding({ finding }: { finding: DimensionFinding }) {
 }
 
 function RiskItem({ risk, index }: { risk: string; index: number }) {
-  const [copied, setCopied] = useState(false);
-
-  const copyQuestion = () => {
-    navigator.clipboard.writeText(risk);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 1800);
-  };
+  const [copied, copy] = useCopied();
 
   return (
     <li className="flex flex-col sm:flex-row sm:items-start justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50/50 p-4 transition-all hover:bg-amber-50/80">
@@ -192,7 +180,7 @@ function RiskItem({ risk, index }: { risk: string; index: number }) {
         <span className="font-semibold">{risk}</span>
       </div>
       <button
-        onClick={copyQuestion}
+        onClick={() => copy(risk)}
         className="shrink-0 self-end sm:self-auto rounded-md border border-amber-300 bg-white px-3 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 transition-colors cursor-pointer shadow-2xs"
       >
         {copied ? "✓ Copied" : "Copy Question"}
@@ -204,13 +192,7 @@ function RiskItem({ risk, index }: { risk: string; index: number }) {
 export default function ProfileView({ profile }: { profile: Profile }) {
   const ev = profile.evidence_inspected;
   const corr = profile.corroboration;
-  const [shareCopied, setShareCopied] = useState(false);
-
-  const copyShareLink = () => {
-    navigator.clipboard.writeText(window.location.href);
-    setShareCopied(true);
-    setTimeout(() => setShareCopied(false), 2000);
-  };
+  const [shareCopied, copy] = useCopied();
 
   return (
     <main className="mx-auto max-w-5xl px-6 py-12 animate-fade-in space-y-12">
@@ -227,11 +209,11 @@ export default function ProfileView({ profile }: { profile: Profile }) {
           </div>
 
           <button
-            onClick={copyShareLink}
+            onClick={() => copy(window.location.href)}
             className="inline-flex items-center gap-2 rounded-lg border border-zinc-200 bg-white px-3.5 py-1.5 text-xs font-semibold text-zinc-800 hover:bg-zinc-50 transition-colors shadow-2xs cursor-pointer"
           >
             <svg className="h-3.5 w-3.5 text-zinc-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
             </svg>
             <span>{shareCopied ? "Link Copied!" : "Copy Share Link"}</span>
           </button>

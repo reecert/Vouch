@@ -3,6 +3,8 @@
 import { useState } from "react";
 import Link from "next/link";
 
+import { useCopied } from "@/lib/useCopied";
+
 const QUESTIONS = [
   {
     id: "verification",
@@ -52,13 +54,7 @@ const QUESTIONS = [
 export default function ProfileIndexDemo() {
   const [activeId, setActiveId] = useState("verification");
   const activeItem = QUESTIONS.find((item) => item.id === activeId) || QUESTIONS[0];
-  const [copiedSha, setCopiedSha] = useState<string | null>(null);
-
-  const copySha = (sha: string) => {
-    navigator.clipboard.writeText(sha);
-    setCopiedSha(sha);
-    setTimeout(() => setCopiedSha(null), 1800);
-  };
+  const [copiedSha, copySha] = useCopied<string>();
 
   return (
     <div className="section-rail rounded-2xl p-1 overflow-hidden vouch-card">
@@ -73,7 +69,6 @@ export default function ProfileIndexDemo() {
       </div>
 
       <div className="grid sm:grid-cols-[220px_1fr] bg-white divide-y sm:divide-y-0 sm:divide-x divide-zinc-200">
-        {/* Left Question Selector Sidebar */}
         <div className="p-3 bg-zinc-50/50 space-y-1">
           <span className="block px-2 py-1 text-[10px] font-mono font-bold uppercase tracking-wider text-zinc-400">
             Ask the Profile
@@ -97,7 +92,6 @@ export default function ProfileIndexDemo() {
           })}
         </div>
 
-        {/* Right Active Finding Panel */}
         <div className="p-6">
           <div className="flex flex-wrap items-center justify-between gap-2 pb-3 border-b border-zinc-100">
             <span className="text-[11px] font-mono font-bold uppercase tracking-wider text-zinc-500">
@@ -122,7 +116,7 @@ export default function ProfileIndexDemo() {
                   <div key={idx} className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 p-2.5 rounded-lg border border-zinc-200/80 bg-white text-xs">
                     <span className="text-zinc-700 font-medium">{claim.text}</span>
                     <button
-                      onClick={() => copySha(claim.sha)}
+                      onClick={() => copySha(claim.sha, claim.sha)}
                       className="inline-flex items-center gap-1.5 font-mono text-[11px] bg-zinc-100 px-2 py-1 rounded border border-zinc-200 text-zinc-800 hover:bg-zinc-200 transition-colors cursor-pointer shrink-0 self-start sm:self-auto"
                     >
                       <span>{claim.sha}</span>

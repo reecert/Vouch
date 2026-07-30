@@ -1,3 +1,5 @@
-"""vouch — evidence-backed capability reports, grounded in real commits. v0: ownership."""
+"""vouch — evidence-backed capability profiles, grounded in real commits.
 
-__version__ = "0.0.1"
+No ``__version__`` here: ``pyproject.toml`` carries it, and a second transcription is one
+that drifts. Read it from installed metadata (``importlib.metadata.version("vouch")``).
+"""

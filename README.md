@@ -14,7 +14,19 @@ what to ask, not to make the decision for them.
 | **L2** `vouch/l2` | Local session logs → derived metrics | Raw logs and source never leave the machine — the upload schema has no free-text field. |
 | **L3** `vouch/l3` | Sessions ↔ commits | Runs locally. Three-valued: corroborated / ambiguous / uncorroborated. |
 | **L4** `vouch/l4` | Diffs → dimension verdicts | `insufficient_evidence` is a schema enum, not a prompt request. Claims cite SHA **and** path. |
-| **L5** `vouch/l5` + `web/` | Profile assembly → static report | Limitations are derived from confounds and absent layers, never volunteered by the model. |
+| **L5** `vouch/l5` + `web/` | Profile assembly → shareable report | Limitations are derived from confounds and absent layers, never volunteered by the model. |
+
+`vouch/pipeline.py` is the layer order written once — the CLI and the hosted worker call the
+same function. `vouch/serve` is the hosted half: a SQLite job queue (`db.py`) the Next app
+shares via `node:sqlite`, and a worker (`worker.py`) that drains it.
+
+## Two ways in, one document
+
+Run the CLI, or connect a repo in the browser. A server cannot read `~/.claude/projects`, so
+the hosted path is **git-only by construction**: its L2/L3-backed dimensions report
+`not_collected` rather than quietly filling the gap. There is no session-log upload endpoint
+and there is not going to be one — the payload staying on the machine is the product, and
+"we could not look" must never render as "we looked".
 
 ## Design rules that are enforced, not aspired to
 
@@ -34,11 +46,16 @@ vouch sessions --dry-run                            # L2: see exactly what would
 vouch profile <repo> --author you@example.com \
     --sessions payload.json --log-dir ~/.claude/projects
 vouch eval --split holdout                          # score the judge against labels
+vouch worker                                        # drain the hosted job queue
 ```
+
+Share links are frozen snapshots: `profile_id` is a hash of the document's own bytes, so a
+regenerated profile gets a new link and the old one stops resolving. That is the design, not
+a bug — see `CLAUDE.md`.
 
 ## Status
 
-L1–L5 are built and tested (416 tests, offline).
+L1–L5 and the hosted connect flow are built and tested (496 tests, offline).
 
 **The judge is uncalibrated.** `eval/labels.yaml` is empty, so nothing here licenses a
 claim about how well its verdicts match human judgement. The harness refuses to print a

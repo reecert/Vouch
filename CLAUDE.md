@@ -36,7 +36,9 @@ them what to ask; it does not decide.
 
 Python 3.12+, `pydantic` + `typer` + `pyyaml`. Provider SDKs (`anthropic`) are an optional
 extra — the deterministic core and the whole test suite need none of them. `web/` is a
-separate Next.js 15 / React 19 / Tailwind 4 app for L5 rendering.
+separate Next.js 15 / React 19 / Tailwind 4 app: the product site and connect flow under
+`app/(site)/`, and the L5 viewer at `/p/<id>` outside it, because a profile is read by
+someone who was sent a link, not by a visitor browsing a site.
 
 ## Layers
 
@@ -69,6 +71,13 @@ via `node:sqlite`, `worker.py` drains the job queue. Neither judges, extracts or
   (author rank + digest), resolved against the clone at run time. `load_labels` scans the
   raw file for anything email-shaped and refuses to load. CI checks out at `fetch-depth: 0`
   so the privacy test scans the whole history.
+- **One scanner decides what an address is: `vouch/privacy.py`.** Every guard imports
+  `find_addresses`/`contains_address`; a second copy of that regex is how one of them
+  silently stops catching. It discounts `userinfo@host` (`git@github.com:acme/api`,
+  `https://tok:secret@host/p`) **positionally**, never by domain — a host we clone from must
+  never reach the fixture-domain allowlist in `test_eval.py`, because allowlisting
+  a host waves through every real mailbox served by it. An address in a URL *path* is still
+  an address.
 - **The repo address stops at ingest.** `RepoSnapshot.repo` is `repo_label(repo_url)`:
   `org/repo` for a remote, the **leaf alone** for a local path, because a local parent
   directory is where someone filed a clone (`~/clients/bigco/api`) and not who owns it. No
@@ -95,7 +104,9 @@ via `node:sqlite`, `worker.py` drains the job queue. Neither judges, extracts or
   patterns are the same string.
 - **Generated profiles never land in `web/data/profiles/`.** That directory is tracked and
   byte-pinned; real documents go to `var/` (gitignored). The split is also what keeps the
-  revoke path unable to reach a checked-in sample.
+  revoke path unable to reach a checked-in sample. The git-only sample is rebuilt by
+  `python scripts/build_sample_profiles.py`, never by hand — a filename that is a hash of
+  the file's own bytes can only be corrected by regeneration.
 - **Ownership is read from the session, never from the request.** Every route that touches a
   job filters on `user_id`; the 404 for someone else's job is the same as for a missing one.
 - **`eval/labels.yaml` is tracked and empty**, and a test keeps it that way. Real labelling
