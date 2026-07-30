@@ -24,7 +24,9 @@ const PRESETS = [
  */
 function parseRepoInput(input: string): string {
   const withoutHost = input.trim().replace(/\.git$/, "").split("github.com/").pop() ?? "";
-  return withoutHost.replace(/^\/+|\/+$/g, "");
+  // A pasted link is usually to a page inside the repo, not its root: `.../tree/main` is
+  // three more segments the server would refuse.
+  return withoutHost.split("/").filter(Boolean).slice(0, 2).join("/");
 }
 
 export default function RepoPicker({ defaultEmail }: { defaultEmail: string }) {
@@ -51,6 +53,7 @@ export default function RepoPicker({ defaultEmail }: { defaultEmail: string }) {
       // account's, and the user would queue a run against a repo they never picked.
       .catch(() => {
         setRepos([]);
+        setMode("custom");
         setError("Your repositories could not be loaded. Enter one by name instead.");
       });
   }, []);

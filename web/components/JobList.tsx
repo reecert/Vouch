@@ -109,7 +109,7 @@ export default function JobList() {
             </div>
 
             <div className="flex items-center gap-2">
-              {job.profile_id && (
+              {job.status === "done" && job.profile_id && (
                 <>
                   <button
                     onClick={() => copyLink(job.profile_id)}
