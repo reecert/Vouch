@@ -14,10 +14,6 @@ export const metadata: Metadata = {
     template: "%s · vouch",
   },
   description: DESCRIPTION,
-  // A share link is unlisted, and an indexed unlisted link is a listed one. Unfurlers read
-  // og tags and ignore this, so cards still render; there is deliberately no robots.txt,
-  // because Slackbot does honour that one and would stop unfurling entirely.
-  robots: { index: false, follow: false },
   openGraph: {
     title: "vouch — engineering capability profile",
     description: DESCRIPTION,

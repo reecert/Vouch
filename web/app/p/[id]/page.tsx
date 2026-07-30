@@ -3,7 +3,7 @@ import { notFound } from "next/navigation";
 
 import ProfileView from "@/components/Profile";
 import { loadProfile } from "@/lib/data";
-import { profileShareMetadata } from "@/lib/share";
+import { NOINDEX, profileShareMetadata } from "@/lib/share";
 
 /**
  * Read per request, not per build.
@@ -21,7 +21,7 @@ export async function generateMetadata({
 }): Promise<Metadata> {
   const { id } = await params;
   const profile = loadProfile(id);
-  if (!profile) return {};
+  if (!profile) return { robots: NOINDEX };
   return profileShareMetadata(
     id,
     profile.evidence_inspected.n_commits_by_subject,

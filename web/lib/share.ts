@@ -22,6 +22,14 @@ import type { Metadata } from "next";
 /** Absolute base for canonical and og:image; unfurlers reject relative URLs. */
 export const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000";
 
+/**
+ * A share link is unlisted, and an indexed unlisted link is a listed one. This belongs to
+ * `/p/<id>` alone — on the root layout it also hid the product site, which has to be found.
+ * Unfurlers ignore it, so cards still render; there is deliberately no `robots.txt`, because
+ * Slackbot does honour that one and would stop unfurling entirely.
+ */
+export const NOINDEX = { index: false, follow: false } as const;
+
 export const SHARE_CARD = {
   url: "/og.png",
   width: 1200,
@@ -50,6 +58,7 @@ export function profileShareMetadata(
   return {
     title,
     description,
+    robots: NOINDEX,
     alternates: { canonical: path },
     // openGraph and twitter replace the parent's wholesale rather than merging, so the
     // card has to be repeated here or a profile link unfurls with no image at all.
