@@ -170,9 +170,16 @@ cd web && npm install && npm run dev      # terminal 1
 vouch worker                              # terminal 2, from the repo root
 ```
 
-The worker needs a judge, so `ANTHROPIC_API_KEY` must be set or every job finishes `failed`
-with "the judge could not produce a grounded verdict". `--once` drains the queue and exits,
-which is the shape a cron-style deployment wants.
+The worker needs a judge, which `[dev]` does not install:
+
+```bash
+pip install -e ".[dev,providers]"
+export ANTHROPIC_API_KEY=...
+```
+
+Without both, `vouch worker` exits non-zero before claiming anything rather than draining
+the queue into failures that read as if the repositories were at fault. `--once` drains the
+queue and exits, which is the shape a cron-style deployment wants.
 
 Environment that both sides read:
 

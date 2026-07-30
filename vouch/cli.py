@@ -50,7 +50,7 @@ from vouch.l4.prompt import PROMPT_VERSION
 from vouch.l4.providers import build_default_provider
 from vouch.l4.schema import Verdict
 from vouch.pipeline import run_profile
-from vouch.serve.worker import serve_forever
+from vouch.serve.worker import WorkerNotReady, serve_forever
 
 app = typer.Typer(help="vouch — evidence-backed capability profiles from real commits.")
 
@@ -523,11 +523,15 @@ def worker(
     ),
 ) -> None:
     """Run queued profile jobs from the web app. Git-only: a server cannot read session logs."""
-    ran = serve_forever(
-        Path(db) if db else None,
-        Path(profile_dir) if profile_dir else None,
-        once=once,
-    )
+    try:
+        ran = serve_forever(
+            Path(db) if db else None,
+            Path(profile_dir) if profile_dir else None,
+            once=once,
+        )
+    except WorkerNotReady as exc:
+        typer.secho(str(exc), fg=typer.colors.RED, err=True)
+        raise typer.Exit(1) from exc
     typer.echo(f"ran {ran} job(s)", err=True)
 
 

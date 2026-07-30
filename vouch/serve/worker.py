@@ -28,9 +28,13 @@ from vouch.l4.providers import build_default_provider
 from vouch.pipeline import DEFAULT_PROFILE_DIR, run_profile
 from vouch.serve.db import JobStatus, claim_next_job, connect, finish_job
 
-__all__ = ["run_job", "serve_forever"]
+__all__ = ["WorkerNotReady", "run_job", "serve_forever"]
 
 POLL_SECONDS = 2.0
+
+
+class WorkerNotReady(Exception):
+    """Misconfiguration that would fail every job. Raised before any row is claimed."""
 
 
 def git_base() -> str:
@@ -80,6 +84,15 @@ def serve_forever(
     both want; the default loop is for a long-lived process.
     """
     profile_dir = profile_dir or DEFAULT_PROFILE_DIR
+    provider = build_default_provider()
+    # Checked once, before claiming anything: an unavailable judge fails every job it is
+    # handed, and `_reason` would report a missing key as a history the judge could not read.
+    if not provider.is_available():
+        raise WorkerNotReady(
+            f"The {provider.name} judge is not available: install the `anthropic` extra and "
+            "set ANTHROPIC_API_KEY. No jobs were claimed."
+        )
+
     ran = 0
     with connect(db) as conn:
         while True:
@@ -96,7 +109,7 @@ def serve_forever(
                     job["full_name"],
                     job["author_email"],
                     profile_dir,
-                    build_default_provider(),
+                    provider,
                 )
             except Exception as exc:  # a worker that dies on one job stops serving all of them
                 print(f"job {job['id']} failed: {exc!r}", file=sys.stderr)

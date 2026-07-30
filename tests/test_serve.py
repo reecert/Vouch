@@ -35,7 +35,7 @@ from vouch.l4.mock import MockJudgeProvider, MockMode
 from vouch.l4.sampling import select_commits
 from vouch.serve import worker as worker_mod
 from vouch.serve.db import GITHUB_FULL_NAME, JobStatus, claim_next_job, connect, new_id, now
-from vouch.serve.worker import run_job, serve_forever
+from vouch.serve.worker import WorkerNotReady, run_job, serve_forever
 
 WEB = Path(__file__).resolve().parents[1] / "web"
 SUBJECT = "alice@example.com"
@@ -186,14 +186,14 @@ class TestFailuresAreReadable:
         assert_no_machine_locals(reason)
 
     def test_a_failing_job_is_recorded_rather_than_killing_the_worker(
-        self, tmp_path, forge, monkeypatch
+        self, tmp_path, forge, judge, monkeypatch
     ) -> None:
         """One bad repo must not stop the queue: the next job still runs."""
         def boom(*_args, **_kwargs):
             raise subprocess.CalledProcessError(128, ["git", "clone"])
 
         monkeypatch.setattr(worker_mod, "run_job", boom)
-        monkeypatch.setattr(worker_mod, "build_default_provider", lambda: None)
+        monkeypatch.setattr(worker_mod, "build_default_provider", lambda: judge)
 
         db = tmp_path / "db"
         with connect(db) as conn:
@@ -223,5 +223,28 @@ class TestServeForever:
         assert re.fullmatch(r"[a-f0-9]{16}", row["profile_id"])
         assert (tmp_path / "profiles" / f"{row['profile_id']}.json").is_file()
 
-    def test_an_empty_queue_is_not_an_error(self, tmp_path) -> None:
+    def test_an_empty_queue_is_not_an_error(self, tmp_path, judge, monkeypatch) -> None:
+        monkeypatch.setattr(worker_mod, "build_default_provider", lambda: judge)
         assert serve_forever(tmp_path / "db", tmp_path / "profiles", once=True) == 0
+
+    def test_an_unavailable_judge_stops_before_a_job_is_claimed(
+        self, tmp_path, forge, monkeypatch
+    ) -> None:
+        """A missing key must not drain the queue into failures that blame the repository."""
+        class Unavailable:
+            name = "anthropic"
+            def is_available(self) -> bool:
+                return False
+
+        monkeypatch.setattr(worker_mod, "build_default_provider", Unavailable)
+
+        db = tmp_path / "db"
+        with connect(db) as conn:
+            job_id = enqueue(conn)
+
+        with pytest.raises(WorkerNotReady):
+            serve_forever(db, tmp_path / "profiles", once=True)
+
+        with connect(db) as conn:
+            row = conn.execute("SELECT * FROM jobs WHERE id = ?", (job_id,)).fetchone()
+        assert row["status"] == JobStatus.QUEUED
